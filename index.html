@@ -46,6 +46,7 @@
   .tune:hover{border-color:var(--blue);}
   .tune.playing{border-color:var(--gold); background:#1e1a2e;}
   .tune .name{font-size:17px;}
+  .tune .orig{font-size:11.5px; color:var(--blue); font-style:italic; opacity:.85;}
   .tune .meta{font-size:12px; color:var(--muted);}
   .tune.playing .name{color:var(--gold);}
 </style>
@@ -89,11 +90,17 @@ Musician.voices.forEach(v=>{
 const tunesEl=document.getElementById('tunes'),
       nowEl=document.getElementById('nowLabel'),
       stopBtn=document.getElementById('stopBtn');
-TUNES.forEach((tu,i)=>{
+/* 依原文曲名字母排序（Roy 定案 2026-09-15）。康康舞的原名刻意寫成
+   「Orphée aux enfers: Ouverture — Galop infernal」——與序曲同前綴、字串較長，
+   排序天然落在序曲正後方，不需要特例；名字本身就說明了它是序曲的壓軸段 */
+TUNES.map((tu,i)=>({tu,i}))
+  .sort((a,b)=>(a.tu.orig||a.tu.name).localeCompare(b.tu.orig||b.tu.name))
+  .forEach(({tu,i})=>{
   const beats=tu.notes.reduce((s,n)=>s+n[1],0);
   const b=document.createElement('button');
   b.className='tune'; b.dataset.i=i;
   b.innerHTML='<span class="name">'+tu.name+'</span>'+
+              (tu.orig?'<span class="orig">'+tu.orig+'</span>':'')+
               '<span class="meta">'+tu.composer+'　'+TEXT['ui.beats'](beats)+'</span>';
   b.onclick=()=>playTune(i);
   tunesEl.appendChild(b);
