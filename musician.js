@@ -42,8 +42,10 @@ const Musician = (() => {
   const FALLBACK = {
     play:  { volume:0.5, bpm:100, chords:true, chordBars:2 },
     voices:{ chip:{gain:0.10,attack:0.005,cut:0.85},
-             crystal:{main:0.8,shimmer:0.2,attack:0.02},
-             piano:{h1:0.7,h2:0.35,h3:0.12,h4:0.05,attack:0.008} },
+             crystal:{oct:2,main:0.34,shimmer:0.16,sparkle:0.30,attack:0.002,ring:3.5,padScale:0,echoTime:0.30,echoFb:0.45,echoMix:0.60},
+             piano:{h1:0.7,h2:0.35,h3:0.12,h4:0.05,attack:0.008},
+             strings:{gain:0.07,attack:0.12,release:0.20,detune:7,brightness:4},
+             flute:{gain:0.22,woody:0.12,attack:0.06,release:0.12,vibRate:5,vibDepth:9} },
     chord: { root:0.30, triad:0.13, attack:0.18 },
   };
 
@@ -88,6 +90,41 @@ const Musician = (() => {
       osc('sine',hz*2,t,dur,P.h2,P.attack,t+dur*0.60,out);
       osc('sine',hz*3,t,dur,P.h3,P.attack,t+dur*0.40,out);
       osc('sine',hz*4,t,dur,P.h4,P.attack,t+dur*0.25,out);
+    },
+    /* 弦樂（v1.05.00，Roy：「弦樂與吹管樂的效果也可以重現嗎？」）：
+       鋸齒波＝完整泛音列（弓擦弦的頻譜）；三把微失諧（±detune 音分）＝群感，
+       一把是獨奏、三把是樂團；低通濾波壓掉鋸齒的毛邊；慢起音＝弓速起步。
+       持續音色：整個音長都站住，收尾用 release 放掉 */
+    strings(hz,t,dur,out,P){
+      const f=actx.createBiquadFilter();
+      f.type='lowpass'; f.frequency.value=Math.min(hz*P.brightness,12000); f.connect(out);
+      [-P.detune,0,P.detune].forEach(dt=>{
+        const o=actx.createOscillator(), g=actx.createGain();
+        o.type='sawtooth'; o.frequency.value=hz; o.detune.value=dt;
+        const rel=Math.min(P.release,dur*0.4), sus=Math.max(t+P.attack,t+dur-rel);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(P.gain,Math.min(t+P.attack,t+dur*0.5));
+        g.gain.setValueAtTime(P.gain,sus);
+        g.gain.linearRampToValueAtTime(0,t+dur);
+        o.connect(g); g.connect(f); o.start(t); o.stop(t+dur+0.05);
+      });
+    },
+    /* 長笛（吹管）：接近純音的正弦＋一點 2 倍泛音給木頭味，
+       輕柔起音（氣流成形需要時間）＋顫音 LFO（吹奏者的氣息，音準微幅波動） */
+    flute(hz,t,dur,out,P){
+      const lfo=actx.createOscillator(), lg=actx.createGain();
+      lfo.frequency.value=P.vibRate; lg.gain.value=P.vibDepth;   // 音分
+      lfo.connect(lg); lfo.start(t); lfo.stop(t+dur+0.05);
+      [[1,P.gain],[2,P.gain*P.woody]].forEach(([m,peak])=>{
+        const o=actx.createOscillator(), g=actx.createGain();
+        o.type='sine'; o.frequency.value=hz*m; lg.connect(o.detune);
+        const rel=Math.min(P.release,dur*0.4), sus=Math.max(t+P.attack,t+dur-rel);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(peak,Math.min(t+P.attack,t+dur*0.5));
+        g.gain.setValueAtTime(peak,sus);
+        g.gain.linearRampToValueAtTime(0,t+dur);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t+dur+0.05);
+      });
     },
   };
 

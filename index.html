@@ -48,6 +48,10 @@
   .tune .name{font-size:17px;}
   .tune .orig{font-size:11.5px; color:var(--blue); font-style:italic; opacity:.85;}
   .tune .meta{font-size:12px; color:var(--muted);}
+  .chips{display:flex; gap:6px; margin-top:6px;}
+  .chip{font-size:12px; padding:3px 12px; border:1px solid var(--line); border-radius:999px;
+        background:none; color:var(--blue); cursor:pointer; font-family:inherit;}
+  .chip:hover{border-color:var(--gold); color:var(--gold);}
   .tune.playing .name{color:var(--gold);}
 </style>
 </head>
@@ -92,23 +96,39 @@ const tunesEl=document.getElementById('tunes'),
       stopBtn=document.getElementById('stopBtn');
 /* 依原文曲名字母排序（Roy 定案 2026-09-15）。康康舞的原名刻意寫成
    「Orphée aux enfers: Ouverture — Galop infernal」——與序曲同前綴、字串較長，
-   排序天然落在序曲正後方，不需要特例；名字本身就說明了它是序曲的壓軸段 */
+   排序天然落在序曲正後方，不需要特例；名字本身就說明了它是序曲的壓軸段。
+   帶 parent 的曲目（Roy 定案：「變奏版這種按鈕跟著原曲」）不佔卡位，
+   變成掛在原曲卡下緣的小膠囊鍵——卡片點了播原版，膠囊點了播變奏 */
+const CARD_BY_TUNE={};   // TUNES index → 它顯示在哪張卡（變奏映到原曲卡）
 TUNES.map((tu,i)=>({tu,i}))
+  .filter(x=>!x.tu.parent)
   .sort((a,b)=>(a.tu.orig||a.tu.name).localeCompare(b.tu.orig||b.tu.name))
   .forEach(({tu,i})=>{
   const beats=tu.notes.reduce((s,n)=>s+n[1],0);
-  const b=document.createElement('button');
-  b.className='tune'; b.dataset.i=i;
+  const b=document.createElement('div');
+  b.className='tune'; b.dataset.i=i; CARD_BY_TUNE[i]=b;
   b.innerHTML='<span class="name">'+tu.name+'</span>'+
               (tu.orig?'<span class="orig">'+tu.orig+'</span>':'')+
               '<span class="meta">'+tu.composer+'　'+TEXT['ui.beats'](beats)+'</span>';
   b.onclick=()=>playTune(i);
+  const kids=TUNES.map((t2,j)=>({t2,j})).filter(x=>x.t2.parent===tu.id);
+  if(kids.length){
+    const row=document.createElement('div'); row.className='chips';
+    kids.forEach(({t2,j})=>{
+      CARD_BY_TUNE[j]=b;
+      const c=document.createElement('button'); c.className='chip'; c.textContent=t2.label||t2.name;
+      c.onclick=e=>{e.stopPropagation(); playTune(j);};   // 卡片本體是原版，膠囊是變奏
+      row.appendChild(c);
+    });
+    b.appendChild(row);
+  }
   tunesEl.appendChild(b);
 });
 
 function mark(i){
   playingIdx=i;
-  tunesEl.querySelectorAll('.tune').forEach(x=>x.classList.toggle('playing',+x.dataset.i===i));
+  const card=i>=0?CARD_BY_TUNE[i]:null;   // 變奏在播時，亮的是原曲那張卡
+  tunesEl.querySelectorAll('.tune').forEach(x=>x.classList.toggle('playing',x===card));
   nowEl.textContent=i>=0?TEXT['ui.playing'](TUNES[i].name):'';
   stopBtn.style.display=i>=0?'':'none';
 }
