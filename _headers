@@ -1,0 +1,22 @@
+## 快取規則（Cloudflare Pages _headers 格式）。
+## 這是「改完就直接是線上版」的靜態站，沒有 staging——測試者手上的版本必須跟推上去的一致。
+## max-age=0 + must-revalidate ＝ 每次載入都回伺服器問「變了嗎」，沒變回 304。
+## 每一個 js/html 檔各列一條——漏列的檔案會被快取住，測試者拿到舊版。
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/musician.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/config.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/strings.zh.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/designer-panel.js
+  Cache-Control: public, max-age=0, must-revalidate

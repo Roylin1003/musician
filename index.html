@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Royal Musician 音樂家</title>
+<style>
+  :root{
+    --bg:#0e1122; --panel:#171b33; --line:#2a2f52; --text:#e8e4d8;
+    --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text); min-height:100vh;
+    font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+    padding:32px 16px 64px;
+  }
+  h1{font-size:28px; letter-spacing:2px; color:var(--gold);}
+  .sub{color:var(--muted); font-size:14px; margin:8px 0 24px;}
+
+  .voices{display:flex; gap:12px; margin-bottom:8px;}
+  .voices button{
+    background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:10px 22px; font-size:16px; cursor:pointer;
+  }
+  .voices button.active{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
+  .hint{color:var(--muted); font-size:13px; margin:10px 0 22px;}
+
+  .now{
+    height:28px; font-size:16px; color:var(--blue); margin-bottom:14px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .now button{
+    background:none; border:1px solid var(--line); color:var(--muted);
+    border-radius:8px; padding:3px 14px; cursor:pointer; font-size:13px;
+  }
+
+  .tunes{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+         gap:12px; width:min(820px,100%);}
+  .tune{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; cursor:pointer; text-align:left; color:var(--text);
+    display:flex; flex-direction:column; gap:4px; font-family:inherit;
+  }
+  .tune:hover{border-color:var(--blue);}
+  .tune.playing{border-color:var(--gold); background:#1e1a2e;}
+  .tune .name{font-size:17px;}
+  .tune .meta{font-size:12px; color:var(--muted);}
+  .tune.playing .name{color:var(--gold);}
+</style>
+</head>
+<body>
+  <h1 data-t="app.title"></h1>
+  <div class="sub" data-t="app.subtitle"></div>
+
+  <div class="voices" id="voices"></div>
+  <div class="hint" data-t="ui.hint"></div>
+
+  <div class="now">
+    <span id="nowLabel"></span>
+    <button id="stopBtn" data-t="ui.stop" style="display:none"></button>
+  </div>
+
+  <div class="tunes" id="tunes"></div>
+
+<script src="config.js"></script>
+<script src="strings.zh.js"></script>
+<script src="musician.js"></script>
+<script src="designer-panel.js"></script>
+<script>
+applyText(CONFIG); applyStaticText();
+
+let curVoice='crystal', playingIdx=-1;
+
+const voicesEl=document.getElementById('voices');
+Musician.voices.forEach(v=>{
+  const b=document.createElement('button');
+  b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
+  if(v===curVoice)b.classList.add('active');
+  b.onclick=()=>{
+    curVoice=v;
+    voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));
+    if(playingIdx>=0)playTune(playingIdx);   // 播放中換音色＝同一首立刻換聲——這頁就是來比音色的
+  };
+  voicesEl.appendChild(b);
+});
+
+const tunesEl=document.getElementById('tunes'),
+      nowEl=document.getElementById('nowLabel'),
+      stopBtn=document.getElementById('stopBtn');
+TUNES.forEach((tu,i)=>{
+  const beats=tu.notes.reduce((s,n)=>s+n[1],0);
+  const b=document.createElement('button');
+  b.className='tune'; b.dataset.i=i;
+  b.innerHTML='<span class="name">'+tu.name+'</span>'+
+              '<span class="meta">'+tu.composer+'　'+TEXT['ui.beats'](beats)+'</span>';
+  b.onclick=()=>playTune(i);
+  tunesEl.appendChild(b);
+});
+
+function mark(i){
+  playingIdx=i;
+  tunesEl.querySelectorAll('.tune').forEach(x=>x.classList.toggle('playing',+x.dataset.i===i));
+  nowEl.textContent=i>=0?TEXT['ui.playing'](TUNES[i].name):'';
+  stopBtn.style.display=i>=0?'':'none';
+}
+function playTune(i){
+  Musician.play(TUNES[i],{voice:curVoice,cfg:CONFIG,onend:()=>mark(-1)});
+  mark(i);
+}
+stopBtn.onclick=()=>{Musician.stop();mark(-1);};
+
+/* 設計師面板：?design=1 開啟（共用閘門），配色跟這頁的深夜金一致 */
+initDesignerPanel(CONFIG,{
+  labels:{
+    play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦',
+    voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴',
+    gain:'音量', attack:'起音秒', cut:'音長比例', main:'主體', shimmer:'高八度泛音',
+    h1:'基音', h2:'二倍泛音', h3:'三倍泛音', h4:'四倍泛音',
+    chord:'和聲參數', root:'根音', triad:'和弦音',
+  },
+  theme:{ bg:'#12152a', text:'#e8e4d8', accent:'#d4a94a', accent2:'#7ea7d8',
+          field:'#1a1e38', line:'#2a2f52', muted:'#8a8fa8', danger:'#c05555' },
+  /* 音色參數改了要重按才聽得到（整首是預先排程的）——播放中就自動重按同一首 */
+  onChange:()=>{ if(playingIdx>=0)playTune(playingIdx); },
+});
+</script>
+</body>
+</html>
