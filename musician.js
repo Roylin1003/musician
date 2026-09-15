@@ -70,10 +70,14 @@ const Musician = (() => {
       g.gain.linearRampToValueAtTime(0,cutT);
       o.connect(g); g.connect(out); o.start(t); o.stop(t+dur);
     },
-    // 水晶（音樂盒）：三角波＋高八度正弦泛音（Math-Racer 驗證過的配方）
+    /* 水晶（v1.03.00 重修）：純正弦三層（玻璃感）＋餘韻拖尾。
+       ring 讓每顆音的衰減拖過音符本身（音與音互相疊＝空靈的主體）；
+       回聲在 play() 的匯流排做，不在這裡 */
     crystal(hz,t,dur,out,P){
-      osc('triangle',hz,  t,dur,P.main,   P.attack,t+dur*0.95,out);
-      osc('sine',    hz*2,t,dur,P.shimmer,P.attack,t+dur*0.7, out);
+      const ring=dur*Math.max(1,P.ring||1);
+      osc('sine',hz,  t,ring,P.main,   P.attack,t+ring*0.95,out);
+      osc('sine',hz*2,t,ring,P.shimmer,P.attack,t+ring*0.70,out);
+      osc('sine',hz*3,t,ring,P.sparkle||0,P.attack,t+ring*0.50,out);
     },
     // 鋼琴：基音＋2/3/4 倍泛音遞減；泛音越高衰減越快（真琴弦的物理走向）
     piano(hz,t,dur,out,P){
@@ -112,12 +116,21 @@ const Musician = (() => {
     master = actx.createGain();
     master.gain.value = cfg.play.volume;
     master.connect(actx.destination);
-    const out = master;   // stop() 之後 master 會換新，排程閉包要抓住自己那一顆
+    /* 旋律匯流排：音色參數帶 echoTime 就掛一條回聲（delay＋回授），乾聲照走。
+       只掛旋律——和聲襯底走 master 保持乾聲，地板不能跟著飄 */
+    let out = master;   // stop() 之後 master 會換新，排程閉包要抓住自己那一顆
+    if(P.echoTime > 0){
+      const bus=actx.createGain(), dl=actx.createDelay(2), fb=actx.createGain(), wet=actx.createGain();
+      dl.delayTime.value=P.echoTime; fb.gain.value=Math.min(0.9,P.echoFb||0); wet.gain.value=P.echoMix||0;
+      bus.connect(master);                       // 乾聲
+      bus.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(master);
+      out=bus;
+    }
 
     // 自帶和聲進行照它走；沒帶才逐小節自動配；chords:false 一律不配
     if(cfg.play.chords && tune.chords!==false && Array.isArray(tune.chords)){
       let ct=t0, cb=0;
-      for(const c of tune.chords){ if(cb>=cap)break; chordVoice(c[0],ct,c[1]*beat,out,cfg.chord); ct+=c[1]*beat; cb+=c[1]; }
+      for(const c of tune.chords){ if(cb>=cap)break; chordVoice(c[0],ct,c[1]*beat,master,cfg.chord); ct+=c[1]*beat; cb+=c[1]; }
     }
     const autoChord = cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
     const BAR = tune.chordBars || cfg.play.chordBars;
@@ -125,7 +138,7 @@ const Musician = (() => {
     let t=t0, played=0, barT=t0, barNames=[], barLen=0;
     const flushBar=()=>{
       if(barLen<=0)return;
-      if(autoChord && barNames.length) chordVoice(chordFor(barNames),barT,barLen*beat,out,cfg.chord);
+      if(autoChord && barNames.length) chordVoice(chordFor(barNames),barT,barLen*beat,master,cfg.chord);
       barT+=barLen*beat; barNames=[]; barLen=0;
     };
     for(const n of tune.notes){
