@@ -1,7 +1,7 @@
 /* config.js —— Musician 音樂家引擎：數值本體（F5 生效）
    版號 x.yy.zz：x＝設計哲學、yy＝功能、zz＝介面。唯一出處在這裡。 */
 const CONFIG = {
-  version: '1.03.00',
+  version: '1.04.00',
 
   play: {
     volume: 0.5,      // 總音量（master gain）
@@ -19,8 +19,12 @@ const CONFIG = {
        三角波換純正弦（玻璃感）＋三倍音微光；ring＝餘韻倍數（音尾拖過音符長度，
        前後音互相疊出洗版感）；echo* ＝回聲匯流排（只掛旋律，和聲襯底保持乾聲）。
        全部是面板旋鈕——空靈的最終裁決權在 Roy 的耳朵 */
-    crystal: { main: 0.55, shimmer: 0.25, sparkle: 0.10, attack: 0.008, ring: 2.2,
-               echoTime: 0.24, echoFb: 0.40, echoMix: 0.30 },
+    /* v1.04.00 空靈三帖藥（Roy：「怎麼調都厚，像鋼琴變高音」）：
+       oct＝上移八度數（預設 +2，音樂盒的樓層；這顆是「輕靈魔法」的主開關）
+       sparkle＝2.756× 鐘鳴泛音（不和諧比例才有「叮」）
+       padScale＝和聲襯底縮到 35%（水晶要浮，地板要讓） */
+    crystal: { oct: 2, main: 0.45, shimmer: 0.18, sparkle: 0.22, attack: 0.003, ring: 2.5,
+               padScale: 0, echoTime: 0.24, echoFb: 0.40, echoMix: 0.45 },   // padScale 0＝無和聲（Roy 定案：「水晶應該沒有和聲，很高很輕，足不點地」）
     // 鋼琴：加法合成——基音＋2/3/4 倍泛音遞減，快起音長衰減（合成鋼琴＝電鋼琴感；
     // 真鋼琴音色要走取樣檔，是另一個量級，見設計藍圖）
     piano:   { h1: 0.7, h2: 0.35, h3: 0.12, h4: 0.05, attack: 0.008 },

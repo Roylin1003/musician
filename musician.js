@@ -70,14 +70,17 @@ const Musician = (() => {
       g.gain.linearRampToValueAtTime(0,cutT);
       o.connect(g); g.connect(out); o.start(t); o.stop(t+dur);
     },
-    /* 水晶（v1.03.00 重修）：純正弦三層（玻璃感）＋餘韻拖尾。
-       ring 讓每顆音的衰減拖過音符本身（音與音互相疊＝空靈的主體）；
-       回聲在 play() 的匯流排做，不在這裡 */
+    /* 水晶（v1.04.00 再修，Roy：「怎麼調都厚，像鋼琴變高音」）。診斷：厚的根源不是波形，
+       是①住錯樓層＋②泛音太和諧＋③襯底太厚。三帖藥：
+       oct＝整體上移八度數（音樂盒住在高兩個八度）；
+       sparkle 改掛在 2.756×（鐘的不和諧模態——「叮」的感覺全靠不和諧比例，2×3× 只會融成厚音）；
+       padScale 在 play() 端把和聲襯底壓薄。ring 餘韻與回聲匯流排照舊 */
     crystal(hz,t,dur,out,P){
+      hz*=Math.pow(2,P.oct||0);
       const ring=dur*Math.max(1,P.ring||1);
-      osc('sine',hz,  t,ring,P.main,   P.attack,t+ring*0.95,out);
-      osc('sine',hz*2,t,ring,P.shimmer,P.attack,t+ring*0.70,out);
-      osc('sine',hz*3,t,ring,P.sparkle||0,P.attack,t+ring*0.50,out);
+      osc('sine',hz,      t,ring,    P.main,   P.attack,t+ring*0.95,out);
+      osc('sine',hz*2,    t,ring,    P.shimmer,P.attack,t+ring*0.60,out);
+      osc('sine',hz*2.756,t,ring*0.5,P.sparkle||0,P.attack,t+ring*0.25,out);  // 鐘鳴泛音，衰減最快
     },
     // 鋼琴：基音＋2/3/4 倍泛音遞減；泛音越高衰減越快（真琴弦的物理走向）
     piano(hz,t,dur,out,P){
@@ -127,10 +130,13 @@ const Musician = (() => {
       out=bus;
     }
 
+    // 襯底厚度可由音色縮放（水晶要浮起來，襯底就得讓開）
+    const pad = P.padScale==null ? 1 : P.padScale;
+    const CH = { root:cfg.chord.root*pad, triad:cfg.chord.triad*pad, attack:cfg.chord.attack };
     // 自帶和聲進行照它走；沒帶才逐小節自動配；chords:false 一律不配
     if(cfg.play.chords && tune.chords!==false && Array.isArray(tune.chords)){
       let ct=t0, cb=0;
-      for(const c of tune.chords){ if(cb>=cap)break; chordVoice(c[0],ct,c[1]*beat,master,cfg.chord); ct+=c[1]*beat; cb+=c[1]; }
+      for(const c of tune.chords){ if(cb>=cap)break; chordVoice(c[0],ct,c[1]*beat,master,CH); ct+=c[1]*beat; cb+=c[1]; }
     }
     const autoChord = cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
     const BAR = tune.chordBars || cfg.play.chordBars;
@@ -138,7 +144,7 @@ const Musician = (() => {
     let t=t0, played=0, barT=t0, barNames=[], barLen=0;
     const flushBar=()=>{
       if(barLen<=0)return;
-      if(autoChord && barNames.length) chordVoice(chordFor(barNames),barT,barLen*beat,master,cfg.chord);
+      if(autoChord && barNames.length) chordVoice(chordFor(barNames),barT,barLen*beat,master,CH);
       barT+=barLen*beat; barNames=[]; barLen=0;
     };
     for(const n of tune.notes){
