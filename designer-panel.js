@@ -1,4 +1,6 @@
-/* 設計師面板（共用版，v10）——掃描 CONFIG 內所有數字／布林葉節點，自動生成可即時調整的旋鈕。
+/* 設計師面板（共用版，v11）——掃描 CONFIG 內所有數字／布林葉節點，自動生成可即時調整的旋鈕。
+   v11（2026-09-16）：新增 opts.title——面板對玩家開放時可換名目（首例：Musician 的「指揮家面板」，
+   Roy 定案比照 Tale 全開放；名字跟著產品走，機制仍是同一具共用面板）。
    出處：抽自 Eden-Defender 的設計師面板（v3.49），拿掉遊戲專屬的儀表頁與敵型分桶，
    只留下「掃描數字→旋鈕」＋「重置」＋「淨差異匯出」這幾件任何調參面板都該有的基本功能，
    給任何 ZPD 網頁遊戲共用：新專案直接複製這份檔案到專案資料夾。
@@ -161,6 +163,7 @@ function initDesignerPanel(CONFIG, opts = {}) {
   const toggleKey = opts.toggleKey || 'F2';
   const onChange = opts.onChange || (() => {});
   const ranges = opts.ranges || {};   // { '路徑或鍵名': [min, max, step] }，見 rangeOf()
+  const panelTitle = opts.title || '設計師面板';   // v11：對玩家開放時可換名目（如「指揮家面板」）
   const CONFIG0 = JSON.parse(JSON.stringify(CONFIG)); // 檔案原值快照，重置／「已改動」判斷／差異匯出都靠它
 
   /* 預設色票（2026-09-14 Roy 改版）：黑底／金主色／紅警告，不再用 Eden-Defender 的
@@ -262,7 +265,7 @@ function initDesignerPanel(CONFIG, opts = {}) {
   const panel = document.createElement('div');
   panel.id = 'dp-panel';
   panel.innerHTML = '<span id="dp-close">✕</span>' +
-    '<h2>設計師面板（' + toggleKey + '）<span id="dp-resetAll">重置全部</span></h2>' +
+    '<h2>' + panelTitle + '（' + toggleKey + '）<span id="dp-resetAll">重置全部</span></h2>' +
     '<div id="dp-guides-ctl"><span id="dp-addH">+ 橫線</span><span id="dp-addV">+ 直線</span><span id="dp-addBox">+ 方框</span><span id="dp-addText">+ 文字</span><span id="dp-clearGuides">清空參考線</span></div>' +
     '<input id="dp-filter" placeholder="過濾：英文路徑或中文（如 速度、lanes）…">' +
     '<div id="dp-knobs"></div>' +
@@ -667,7 +670,7 @@ function initDesignerPanel(CONFIG, opts = {}) {
   const handle = document.createElement('div');
   handle.id = 'dp-handle';
   handle.textContent = '⚙';
-  handle.title = '設計師面板（' + toggleKey + '）';
+  handle.title = panelTitle + '（' + toggleKey + '）';
   handle.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9998;cursor:pointer;' +
     'width:40px;height:40px;line-height:40px;text-align:center;font-size:20px;border-radius:50%;' +
     'background:' + TH.bg + ';color:' + TH.accent + ';border:1px solid ' + TH.line + ';' +

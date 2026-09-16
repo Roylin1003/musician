@@ -142,8 +142,12 @@ function playTune(i){
 }
 stopBtn.onclick=()=>{Musician.stop();mark(-1);};
 
-/* 設計師面板：?design=1 開啟（共用閘門），配色跟這頁的深夜金一致 */
+/* 指揮家面板（v1.08.01，Roy 定案比照紙芝居：對一般使用者全開放）：
+   gate:false＝人人可開——這裡的旋鈕全是音色與演奏參數，調壞了 F5 就復原，
+   沒有成績可作弊（「影響成績的歸設計師」判準在本專案沒有成績）。
+   名目「指揮家」，機制仍是共用設計師面板 v11 的 opts.title */
 initDesignerPanel(CONFIG,{
+  gate:false, title:'指揮家面板',
   labels:{
     play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦',
     voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴',
