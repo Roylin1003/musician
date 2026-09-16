@@ -25,6 +25,8 @@
     border-radius:10px; padding:10px 22px; font-size:16px; cursor:pointer;
   }
   .voices button.active{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
+  #mixToggle{margin-left:14px; border-radius:999px; font-size:13px; padding:10px 16px; color:var(--muted);}
+  #mixToggle.mixOn{border-color:var(--blue); color:var(--blue); background:#141b33;}
   .hint{color:var(--muted); font-size:13px; margin:10px 0 22px;}
 
   .now{
@@ -35,6 +37,7 @@
     background:none; border:1px solid var(--line); color:var(--muted);
     border-radius:8px; padding:3px 14px; cursor:pointer; font-size:13px;
   }
+  #modeBtn{color:var(--blue); border-color:var(--line); font-family:inherit;}
 
   .tunes{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
          gap:12px; width:min(820px,100%);}
@@ -63,6 +66,7 @@
   <div class="hint" data-t="ui.hint"></div>
 
   <div class="now">
+    <button id="modeBtn"></button>
     <span id="nowLabel"></span>
     <button id="stopBtn" data-t="ui.stop" style="display:none"></button>
   </div>
@@ -76,10 +80,11 @@
 <script>
 applyText(CONFIG); applyStaticText();
 
-/* 音色可複選疊加（v1.08.00，Roy：「讓音色同時作用，自己混音」）：
-   點一下切換開關，勾幾個疊幾層（同旋律 doubling）；至少留一個。
-   播放中改組合立刻重播——這頁就是混音台 */
-let activeVoices=new Set(['piano']), playingIdx=-1;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
+/* 音色雙模式（v1.09.00，Roy：「允許玩家完全不選。也許在音色右邊做個切換開關？」）：
+   指揮關（預設）＝單選——點哪個換哪個，快速比音色；
+   指揮開＝自由編制（同旋律 doubling），可以全部關掉＝靜場（指揮的休止手勢XD）。
+   播放中改編制立刻生效。「指揮／混音師」職稱由 Roy 正名 2026-09-16 */
+let activeVoices=new Set(['piano']), playingIdx=-1, mixMode=false;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
 
 const voicesEl=document.getElementById('voices');
 Musician.voices.forEach(v=>{
@@ -87,13 +92,30 @@ Musician.voices.forEach(v=>{
   b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
   if(activeVoices.has(v))b.classList.add('active');
   b.onclick=()=>{
-    if(activeVoices.has(v)){ if(activeVoices.size>1)activeVoices.delete(v); }
-    else activeVoices.add(v);
-    voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',activeVoices.has(x.dataset.v)));
+    if(mixMode){ activeVoices.has(v)?activeVoices.delete(v):activeVoices.add(v); }
+    else activeVoices=new Set([v]);
+    paintVoices();
     if(playingIdx>=0)playTune(playingIdx);
   };
   voicesEl.appendChild(b);
 });
+const mixBtn=document.createElement('button');
+mixBtn.id='mixToggle'; mixBtn.textContent=TEXT['ui.mix'];
+mixBtn.onclick=()=>{
+  mixMode=!mixMode;
+  if(!mixMode && activeVoices.size!==1)   // 收回單選：留最左邊亮著的那顆；全暗就回預設鋼琴
+    activeVoices=new Set([Musician.voices.find(v=>activeVoices.has(v))||'piano']);
+  paintVoices();
+  if(playingIdx>=0)playTune(playingIdx);
+};
+voicesEl.appendChild(mixBtn);
+function paintVoices(){
+  voicesEl.querySelectorAll('button').forEach(x=>{
+    if(x.id==='mixToggle') x.classList.toggle('mixOn',mixMode);
+    else x.classList.toggle('active',activeVoices.has(x.dataset.v));
+  });
+}
+paintVoices();
 
 const tunesEl=document.getElementById('tunes'),
       nowEl=document.getElementById('nowLabel'),
@@ -136,18 +158,42 @@ function mark(i){
   nowEl.textContent=i>=0?TEXT['ui.playing'](TUNES[i].name):'';
   stopBtn.style.display=i>=0?'':'none';
 }
+/* 播放模式（v1.09.00，Roy：「還有循環播放，單曲播放，隨機播放。嗯？這就是音樂播放器嘛。」）：
+   單曲＝播完停；循環＝同一首重來；隨機＝洗牌袋輪播全庫（含變奏，一輪不重複、不跨輪連莊——
+   Math-Racer 換曲的同一個形狀）。曲終才看模式，手點永遠直接播 */
+const MODES=['single','loop','shuffle'];
+let playMode='single', shuffleBag=[];
+const modeBtn=document.getElementById('modeBtn');
+function paintMode(){ modeBtn.textContent=TEXT['ui.mode.'+playMode]; }
+modeBtn.onclick=()=>{ playMode=MODES[(MODES.indexOf(playMode)+1)%MODES.length]; paintMode(); };
+paintMode();
+function nextShuffle(){
+  if(!shuffleBag.length){
+    shuffleBag=TUNES.map((_,i)=>i);
+    for(let i=shuffleBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffleBag[i],shuffleBag[j]]=[shuffleBag[j],shuffleBag[i]];}
+    if(shuffleBag.length>1&&shuffleBag[shuffleBag.length-1]===playingIdx)
+      [shuffleBag[shuffleBag.length-1],shuffleBag[0]]=[shuffleBag[0],shuffleBag[shuffleBag.length-1]];
+  }
+  return shuffleBag.pop();
+}
+function handleEnd(i){
+  if(playMode==='loop') playTune(i);
+  else if(playMode==='shuffle') playTune(nextShuffle());
+  else mark(-1);
+}
 function playTune(i){
-  Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,onend:()=>mark(-1)});
+  if(!activeVoices.size){ Musician.stop(); mark(-1); return; }   // 全關＝靜場
+  Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,onend:()=>handleEnd(i)});
   mark(i);
 }
 stopBtn.onclick=()=>{Musician.stop();mark(-1);};
 
-/* 指揮家面板（v1.08.01，Roy 定案比照紙芝居：對一般使用者全開放）：
-   gate:false＝人人可開——這裡的旋鈕全是音色與演奏參數，調壞了 F5 就復原，
-   沒有成績可作弊（「影響成績的歸設計師」判準在本專案沒有成績）。
-   名目「指揮家」，機制仍是共用設計師面板 v11 的 opts.title */
+/* 混音師面板（v1.08.01 全開放；v1.09.00 正名，Roy：「我稱為混音的其實是指揮家，
+   指揮家面板其實是混音師面板XD」——選樂器上場＝指揮（音色列的「指揮」開關），
+   調音量泛音回聲＝混音師（本面板）。gate:false＝人人可開：旋鈕全是音色演奏參數，
+   調壞 F5 復原，無成績可作弊。機制仍是共用面板 v11 的 opts.title */
 initDesignerPanel(CONFIG,{
-  gate:false, title:'指揮家面板',
+  gate:false, title:'混音師面板',
   labels:{
     play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦',
     voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴', strings:'弦樂', flute:'長笛',

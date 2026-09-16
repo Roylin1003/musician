@@ -10,7 +10,11 @@ const TEXT = {
   'ui.voice.strings': '弦樂版',
   'ui.voice.flute':   '長笛版',
   'ui.stop':      '停止',
-  'ui.hint':      '音色可複選疊加——勾幾個疊幾層；點任何一首開始播放，播放中改組合立刻重播',
+  'ui.mode.single':  '單曲播放',
+  'ui.mode.loop':    '循環播放',
+  'ui.mode.shuffle': '隨機播放',
+  'ui.mix':       '指揮',   // 疊加模式＝指揮家決定哪些樂器上場（Roy 正名 2026-09-16）
+  'ui.hint':      '點音色即切換；打開「指揮」後可自由疊加樂器或全部關掉，播放中改編制立刻生效',
   'ui.playing':   n => '♪ 正在演奏：' + n,
   'ui.beats':     n => n + ' 拍',
 };
