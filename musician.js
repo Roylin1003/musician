@@ -49,7 +49,18 @@ const Musician = (() => {
     chord: { root:0.30, triad:0.13, attack:0.18 },
   };
 
-  let actx=null, master=null, endTimer=null;
+  let actx=null, master=null, endTimer=null, limiter=null;
+  /* 防削波保險（v1.06.00，Roy：「耳機聽咚咚聲會破音」）：所有聲音過一顆壓縮器再出門。
+     多聲部＋回聲＋襯底的瞬時總和很容易超過 1.0，超過就是硬削波＝破音；
+     壓縮器把峰值軟著陸。每個 AudioContext 建一次，常駐 */
+  function ensureLimiter(){
+    if(limiter) return limiter;
+    limiter=actx.createDynamicsCompressor();
+    limiter.threshold.value=-12; limiter.knee.value=24; limiter.ratio.value=6;
+    limiter.attack.value=0.003; limiter.release.value=0.25;
+    limiter.connect(actx.destination);
+    return limiter;
+  }
 
   function osc(type,hz,t,dur,peak,attack,decayAt,out){
     const o=actx.createOscillator(), g=actx.createGain();
@@ -128,10 +139,14 @@ const Musician = (() => {
     },
   };
 
-  // 襯底：根音低八度（正弦、稍厚）＋三和弦（三角波、很薄），慢起音不搶旋律前緣
+  /* 襯底：根音＋三和弦（三角波、很薄），慢起音不搶旋律前緣。
+     根音預設第 3 八度（v1.06.00，Roy：「每個版本都有低沉的咚咚聲」「耳機聽會破音」——
+     原本掛第 2 八度＝65Hz，耳機放得出來、筆電喇叭放不出來，低頻能量疊上旋律就削波；
+     rootOct 是旋鈕，要更沉自己拉回 2） */
   function chordVoice(key,t,dur,out,P){
     const r=chordRoot(key);
-    const notes=[r+'2'].concat(TRIAD[key].map(n=>n+(NOTE_BASE[n]<NOTE_BASE[r]?'4':'3')));
+    const ro=Math.round(P.rootOct==null?3:P.rootOct);
+    const notes=[r+ro].concat(TRIAD[key].map(n=>n+(NOTE_BASE[n]<NOTE_BASE[r]?'4':'3')));
     notes.forEach((nm,i)=>{
       const hz=noteHz(nm); if(!hz)return;
       osc(i===0?'sine':'triangle',hz,t,dur,i===0?P.root:P.triad,P.attack,t+dur*0.98,out);
@@ -140,8 +155,10 @@ const Musician = (() => {
 
   function stop(){
     if(endTimer){ clearTimeout(endTimer); endTimer=null; }
+    if(schedTimer){ clearTimeout(schedTimer); schedTimer=null; }
     if(master){ try{master.disconnect();}catch(e){} master=null; }  // 已排程的音一起切掉
   }
+  let schedTimer=null;
 
   function play(tune, opts={}){
     stop();
@@ -155,7 +172,7 @@ const Musician = (() => {
 
     master = actx.createGain();
     master.gain.value = cfg.play.volume;
-    master.connect(actx.destination);
+    master.connect(ensureLimiter());
     /* 旋律匯流排：音色參數帶 echoTime 就掛一條回聲（delay＋回授），乾聲照走。
        只掛旋律——和聲襯底走 master 保持乾聲，地板不能跟著飄 */
     let out = master;   // stop() 之後 master 會換新，排程閉包要抓住自己那一顆
@@ -169,32 +186,60 @@ const Musician = (() => {
 
     // 襯底厚度可由音色縮放（水晶要浮起來，襯底就得讓開）
     const pad = P.padScale==null ? 1 : P.padScale;
-    const CH = { root:cfg.chord.root*pad, triad:cfg.chord.triad*pad, attack:cfg.chord.attack };
-    // 自帶和聲進行照它走；沒帶才逐小節自動配；chords:false 一律不配
+    const CH = { root:cfg.chord.root*pad, triad:cfg.chord.triad*pad, attack:cfg.chord.attack,
+                 rootOct:cfg.chord.rootOct };
+
+    /* v1.06.00 分段排程：先把整首算成事件表（純資料，快），再以 look-ahead 每秒
+       把「接下來 5 秒」排進 WebAudio。全曲一次排的舊做法在小夜曲全樂章（2600 事件）
+       實測凍 622ms——長樂章進庫後這不再是理論問題。發聲時間仍是絕對時間軸，取樣級準確 */
+    const events=[];   // {at:相對 t0 的秒數, run:排程呼叫}
     if(cfg.play.chords && tune.chords!==false && Array.isArray(tune.chords)){
-      let ct=t0, cb=0;
-      for(const c of tune.chords){ if(cb>=cap)break; chordVoice(c[0],ct,c[1]*beat,master,CH); ct+=c[1]*beat; cb+=c[1]; }
+      let ct=0, cb=0;
+      for(const c of tune.chords){
+        if(cb>=cap)break;
+        const at=ct, dur=c[1]*beat, key=c[0];
+        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH)});
+        ct+=dur; cb+=c[1];
+      }
     }
     const autoChord = cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
     const BAR = tune.chordBars || cfg.play.chordBars;
 
-    let t=t0, played=0, barT=t0, barNames=[], barLen=0;
+    let t=0, played=0, barT=0, barNames=[], barLen=0;
     const flushBar=()=>{
       if(barLen<=0)return;
-      if(autoChord && barNames.length) chordVoice(chordFor(barNames),barT,barLen*beat,master,CH);
+      if(autoChord && barNames.length){
+        const at=barT, dur=barLen*beat, key=chordFor(barNames);
+        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH)});
+      }
       barT+=barLen*beat; barNames=[]; barLen=0;
     };
     for(const n of tune.notes){
       if(played>=cap)break;
       const dur=n[1]*beat;
-      if(n[0]){ VOICES[voice](noteHz(n[0]),t,dur,out,P); barNames.push(n[0][0]); }
+      if(n[0]){
+        const at=t, hz=noteHz(n[0]);
+        events.push({at, run:()=>VOICES[voice](hz,t0+at,dur,out,P)});
+        barNames.push(n[0][0]);
+      }
       t+=dur; played+=n[1]; barLen+=n[1];
       if(barLen>=BAR)flushBar();
     }
     flushBar();
+    events.sort((a,b)=>a.at-b.at);   // 和聲事件與旋律事件交錯，排一次
 
-    if(opts.onend) endTimer=setTimeout(opts.onend,(t-actx.currentTime)*1000);
-    return t-t0;   // 這一次播放的長度（秒），呼叫端排 UI 用
+    const HORIZON=5;   // 秒；look-ahead 窗
+    let idx=0;
+    const pump=()=>{
+      schedTimer=null;
+      const until=actx.currentTime-t0+HORIZON;
+      while(idx<events.length && events[idx].at<=until){ events[idx].run(); idx++; }
+      if(idx<events.length) schedTimer=setTimeout(pump,1000);
+    };
+    pump();
+
+    if(opts.onend) endTimer=setTimeout(opts.onend,(t0+t-actx.currentTime)*1000);
+    return t;   // 這一次播放的長度（秒），呼叫端排 UI 用
   }
 
   return { play, stop, noteHz, voices:Object.keys(VOICES) };
