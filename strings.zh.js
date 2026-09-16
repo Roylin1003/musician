@@ -10,7 +10,7 @@ const TEXT = {
   'ui.voice.strings': '弦樂版',
   'ui.voice.flute':   '長笛版',
   'ui.stop':      '停止',
-  'ui.hint':      '選一個音色，點任何一首開始播放；播放中點別首直接換曲、換音色立刻換聲',
+  'ui.hint':      '音色可複選疊加——勾幾個疊幾層；點任何一首開始播放，播放中改組合立刻重播',
   'ui.playing':   n => '♪ 正在演奏：' + n,
   'ui.beats':     n => n + ' 拍',
 };

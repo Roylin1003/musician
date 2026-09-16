@@ -76,17 +76,21 @@
 <script>
 applyText(CONFIG); applyStaticText();
 
-let curVoice='crystal', playingIdx=-1;
+/* 音色可複選疊加（v1.08.00，Roy：「讓音色同時作用，自己混音」）：
+   點一下切換開關，勾幾個疊幾層（同旋律 doubling）；至少留一個。
+   播放中改組合立刻重播——這頁就是混音台 */
+let activeVoices=new Set(['crystal']), playingIdx=-1;
 
 const voicesEl=document.getElementById('voices');
 Musician.voices.forEach(v=>{
   const b=document.createElement('button');
   b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
-  if(v===curVoice)b.classList.add('active');
+  if(activeVoices.has(v))b.classList.add('active');
   b.onclick=()=>{
-    curVoice=v;
-    voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));
-    if(playingIdx>=0)playTune(playingIdx);   // 播放中換音色＝同一首立刻換聲——這頁就是來比音色的
+    if(activeVoices.has(v)){ if(activeVoices.size>1)activeVoices.delete(v); }
+    else activeVoices.add(v);
+    voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',activeVoices.has(x.dataset.v)));
+    if(playingIdx>=0)playTune(playingIdx);
   };
   voicesEl.appendChild(b);
 });
@@ -133,7 +137,7 @@ function mark(i){
   stopBtn.style.display=i>=0?'':'none';
 }
 function playTune(i){
-  Musician.play(TUNES[i],{voice:curVoice,cfg:CONFIG,onend:()=>mark(-1)});
+  Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,onend:()=>mark(-1)});
   mark(i);
 }
 stopBtn.onclick=()=>{Musician.stop();mark(-1);};

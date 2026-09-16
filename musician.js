@@ -164,28 +164,36 @@ const Musician = (() => {
     stop();
     if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return 0; } }
     const cfg   = opts.cfg || FALLBACK;
-    const voice = VOICES[opts.voice] ? opts.voice : 'crystal';
-    const P     = cfg.voices[voice];
+    /* v1.08.00 疊奏混音（Roy：「有沒有可能讓音色同時作用，自己混音？」）：
+       voice 可以是字串或陣列，同一條旋律每個音色各奏一層（管弦樂法的 doubling）。
+       這不是交響樂——交響是分部各司其職，那需要多聲部曲譜（見藍圖 💡）；
+       疊奏是同旋律多層樂器：厚度與亮度，即開即用 */
+    const voices = [].concat(opts.voice||'crystal').filter(v=>VOICES[v]);
+    if(!voices.length) voices.push('crystal');
     const beat  = 60/(tune.bpm || cfg.play.bpm);
     const cap   = opts.beats || Infinity;
     const t0    = actx.currentTime + 0.08;
 
     master = actx.createGain();
-    master.gain.value = cfg.play.volume;
+    master.gain.value = cfg.play.volume / Math.sqrt(voices.length);   // 疊幾層就退幾分，剩下交給壓縮器
     master.connect(ensureLimiter());
-    /* 旋律匯流排：音色參數帶 echoTime 就掛一條回聲（delay＋回授），乾聲照走。
-       只掛旋律——和聲襯底走 master 保持乾聲，地板不能跟著飄 */
-    let out = master;   // stop() 之後 master 會換新，排程閉包要抓住自己那一顆
-    if(P.echoTime > 0){
-      const bus=actx.createGain(), dl=actx.createDelay(2), fb=actx.createGain(), wet=actx.createGain();
-      dl.delayTime.value=P.echoTime; fb.gain.value=Math.min(0.9,P.echoFb||0); wet.gain.value=P.echoMix||0;
-      bus.connect(master);                       // 乾聲
-      bus.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(master);
-      out=bus;
-    }
+    /* 每個音色自己的匯流排：帶 echoTime 的掛回聲（乾聲照走），其餘直通 master。
+       和聲襯底永遠走 master 乾聲，地板不能跟著飄 */
+    const buses = voices.map(v=>{
+      const P=cfg.voices[v];
+      let out=master;
+      if(P.echoTime > 0){
+        const bus=actx.createGain(), dl=actx.createDelay(2), fb=actx.createGain(), wet=actx.createGain();
+        dl.delayTime.value=P.echoTime; fb.gain.value=Math.min(0.9,P.echoFb||0); wet.gain.value=P.echoMix||0;
+        bus.connect(master);
+        bus.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(master);
+        out=bus;
+      }
+      return {v, P, out};
+    });
 
-    // 襯底厚度可由音色縮放（水晶要浮起來，襯底就得讓開）
-    const pad = P.padScale==null ? 1 : P.padScale;
+    // 襯底厚度：取各層音色中最大的 padScale（有任何一層要地板就給地板；全是水晶＝無襯底）
+    const pad = Math.max(...buses.map(b=>b.P.padScale==null?1:b.P.padScale));
     const CH = { root:cfg.chord.root*pad, triad:cfg.chord.triad*pad, attack:cfg.chord.attack,
                  rootOct:cfg.chord.rootOct };
 
@@ -219,7 +227,7 @@ const Musician = (() => {
       const dur=n[1]*beat;
       if(n[0]){
         const at=t, hz=noteHz(n[0]);
-        events.push({at, run:()=>VOICES[voice](hz,t0+at,dur,out,P)});
+        events.push({at, run:()=>buses.forEach(b=>VOICES[b.v](hz,t0+at,dur,b.out,b.P))});
         barNames.push(n[0][0]);
       }
       t+=dur; played+=n[1]; barLen+=n[1];

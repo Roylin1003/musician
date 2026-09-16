@@ -1,7 +1,7 @@
 /* config.js —— Musician 音樂家引擎：數值本體（F5 生效）
    版號 x.yy.zz：x＝設計哲學、yy＝功能、zz＝介面。唯一出處在這裡。 */
 const CONFIG = {
-  version: '1.07.01',
+  version: '1.08.00',
 
   play: {
     volume: 0.5,      // 總音量（master gain）
