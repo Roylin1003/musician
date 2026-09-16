@@ -55,6 +55,7 @@
   .chip{font-size:12px; padding:3px 12px; border:1px solid var(--line); border-radius:999px;
         background:none; color:var(--blue); cursor:pointer; font-family:inherit;}
   .chip:hover{border-color:var(--gold); color:var(--gold);}
+  .chip.playing{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
   .tune.playing .name{color:var(--gold);}
 </style>
 </head>
@@ -143,6 +144,7 @@ TUNES.map((tu,i)=>({tu,i}))
     kids.forEach(({t2,j})=>{
       CARD_BY_TUNE[j]=b;
       const c=document.createElement('button'); c.className='chip'; c.textContent=t2.label||t2.name;
+      c.dataset.j=j;
       c.onclick=e=>{e.stopPropagation(); playTune(j);};   // 卡片本體是原版，膠囊是變奏
       row.appendChild(c);
     });
@@ -153,8 +155,13 @@ TUNES.map((tu,i)=>({tu,i}))
 
 function mark(i){
   playingIdx=i;
-  const card=i>=0?CARD_BY_TUNE[i]:null;   // 變奏在播時，亮的是原曲那張卡
+  /* v1.09.01 顯示歧義修正（Roy：「長笛版跳到小星星，但出來的不是小星星」——
+     隨機抽到變奏曲時亮的是母卡，看起來像在播原版）：
+     播原版＝卡片發光；播變奏＝只有那顆膠囊發光，卡片本體不亮 */
+  const isVariant=i>=0&&TUNES[i].parent;
+  const card=i>=0&&!isVariant?CARD_BY_TUNE[i]:null;
   tunesEl.querySelectorAll('.tune').forEach(x=>x.classList.toggle('playing',x===card));
+  tunesEl.querySelectorAll('.chip').forEach(x=>x.classList.toggle('playing',isVariant&&+x.dataset.j===i));
   nowEl.textContent=i>=0?TEXT['ui.playing'](TUNES[i].name):'';
   stopBtn.style.display=i>=0?'':'none';
 }
