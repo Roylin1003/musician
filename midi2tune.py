@@ -84,6 +84,26 @@ def main():
         if cur is None: cur = k                    # 掐頭去掉起始休止
         if k > cur: out.append((None, k - cur))
         out.append((p + tp, d16)); cur = k + d16
+    # --squash N：顫音收斂（v1.08.02，藍色多瑙河序奏實戰）。管弦 MIDI 的弦樂 tremolo
+    # 逐格抽譜會變成機關槍連打；連續 ≥N 顆 1 格短音、音高集合 ≤2 的段落＝顫音，
+    # 收斂成最高音的一顆長音（保留微光鋪底的氛圍）。旋律跑句音高多變，不會被誤收
+    sq = int(args.get('--squash', 0))
+    if sq:
+        out2 = []; run = []
+        def flush():
+            if len(run) >= sq and len(set(p for p, _ in run)) <= 2:
+                out2.append((max(p for p, _ in run), sum(d for _, d in run)))
+            else:
+                out2.extend(run)
+            run.clear()
+        for p, d in out:
+            if p is not None and d <= 1:
+                # 和聲換位＝新音高使集合超過 2 → 先收斂前段再起新段
+                if run and len(set(x for x, _ in run) | {p}) > 2: flush()
+                run.append((p, d))
+            else: flush(); out2.append((p, d))
+        flush()
+        out = out2
     items = ['[%s,%s]' % ('null' if p is None else "'" + nm(p) + "'", fb(d)) for p, d in out]
     rows = [','.join(items[i:i+8]) for i in range(0, len(items), 8)]
     total = sum(d for _, d in out) * 0.25
