@@ -79,7 +79,7 @@ applyText(CONFIG); applyStaticText();
 /* 音色可複選疊加（v1.08.00，Roy：「讓音色同時作用，自己混音」）：
    點一下切換開關，勾幾個疊幾層（同旋律 doubling）；至少留一個。
    播放中改組合立刻重播——這頁就是混音台 */
-let activeVoices=new Set(['crystal']), playingIdx=-1;
+let activeVoices=new Set(['piano']), playingIdx=-1;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
 
 const voicesEl=document.getElementById('voices');
 Musician.voices.forEach(v=>{
@@ -150,7 +150,9 @@ initDesignerPanel(CONFIG,{
   gate:false, title:'指揮家面板',
   labels:{
     play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦',
-    voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴',
+    voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴', strings:'弦樂', flute:'長笛',
+    release:'收音秒', detune:'失諧音分', brightness:'亮度倍數', woody:'木頭味',
+    vibRate:'顫音頻率', vibDepth:'顫音深度', rootOct:'根音八度',
     gain:'音量', attack:'起音秒', cut:'音長比例', main:'主體', shimmer:'高八度泛音',
     oct:'上移八度數', sparkle:'鐘鳴泛音', ring:'餘韻倍數', padScale:'襯底比例',
     echoTime:'回聲間隔秒', echoFb:'回聲回授', echoMix:'回聲比例',
