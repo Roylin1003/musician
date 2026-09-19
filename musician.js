@@ -8,6 +8,7 @@
        beats ＝ 只播前 N 拍（辨認遊戲的「猜歌難度」就是這個數字）；省略＝整首
        onend ＝ 播完呼叫（自然結束才叫，stop() 打斷不叫）
      Musician.stop()
+     Musician.fromJianpu('3.1415926', {bpm, base, name})  → tune（簡譜字串直接變曲，語法見函式註解）
 
    排程：整首一次排進 WebAudio 絕對時間軸（取樣級準確）。代價是播放中改音色參數
    不會即時生效，要重按——調參工作流是「拉旋鈕→重按同一首」，可接受。
@@ -250,5 +251,38 @@ const Musician = (() => {
     return t;   // 這一次播放的長度（秒），呼叫端排 UI 用
   }
 
-  return { play, stop, noteHz, voices:Object.keys(VOICES) };
+  /* 簡譜 → tune（v1.10.00，Roy：「3.1415926，圓周率當樂譜！我想要輸入簡譜就能發音」）。
+     語法（一個字元一個動作，空白與分隔符忽略）：
+       1–7  音級（C 大調：1=C 2=D 3=E 4=F 5=G 6=A 7=B）      0  休止
+       ^ 或 '  下一顆音升八度   _ 或 ,  下一顆音降八度（可疊，^^ 升兩個）
+       #  升半音   b  降半音                                 -  延長前一顆音一拍
+       .  前一顆音加半拍（附點）  /  前一顆音減半（八分）；//＝十六分
+       8 9  圓周率的數字裡本來就會出現，當作 1 與 2 的高八度（8=1̇、9=2̇）——數字當譜的慣例
+     其餘字元（小數點以外的標點、字母、換行）一律略過，所以「3.1415926」貼進來直接能唱 */
+  const DEGREE={1:0,2:2,3:4,4:5,5:7,6:9,7:11, 8:12, 9:14};
+  function fromJianpu(text, opts={}){
+    const base=opts.base==null?4:opts.base;          // 1 落在第幾八度（C4＝中央 C）
+    const notes=[]; let oct=0, acc=0;
+    const NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    for(const ch of String(text)){
+      if(ch==='^'||ch==="'"){oct++;continue;}
+      if(ch==='_'||ch===','){oct--;continue;}
+      if(ch==='#'){acc=1;continue;}
+      if(ch==='b'){acc=-1;continue;}
+      if(ch==='-'){ if(notes.length) notes[notes.length-1][1]+=1; continue; }
+      if(ch==='.'){ if(notes.length) notes[notes.length-1][1]*=1.5; continue; }
+      if(ch==='/'){ if(notes.length) notes[notes.length-1][1]/=2; continue; }
+      if(ch==='0'){ notes.push([null,1]); oct=0; acc=0; continue; }
+      if(ch>='1'&&ch<='9'){
+        const semi=DEGREE[ch]+acc, midi=12*(base+1)+semi+12*oct;
+        const m=((midi%12)+12)%12, o=Math.floor(midi/12)-1;
+        notes.push([NAMES[m]+o, 1]); oct=0; acc=0;
+      }
+      // 其他字元：略過
+    }
+    return { id:'jianpu', name:opts.name||'簡譜', composer:opts.composer||'即興', bpm:opts.bpm||120,
+             chords:opts.chords===undefined?false:opts.chords, notes };
+  }
+
+  return { play, stop, noteHz, fromJianpu, voices:Object.keys(VOICES) };
 })();

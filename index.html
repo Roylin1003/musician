@@ -57,6 +57,21 @@
   .chip:hover{border-color:var(--gold); color:var(--gold);}
   .chip.playing{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
   .tune.playing .name{color:var(--gold);}
+
+  .jp{width:min(820px,100%); margin-top:40px; border-top:1px solid var(--line); padding-top:24px;}
+  .jp h2{font-size:18px; color:var(--gold); letter-spacing:1px; margin-bottom:12px;}
+  .jpRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+  #jpText{width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line);
+          border-radius:10px; padding:12px 14px; font-size:18px; letter-spacing:2px;
+          font-family:Consolas,"Noto Sans Mono",monospace; resize:vertical;}
+  #jpText:focus{outline:none; border-color:var(--blue);}
+  .jpCtl button,.jpCtl label{background:var(--panel); color:var(--text); border:1px solid var(--line);
+          border-radius:999px; padding:7px 16px; font-size:14px; cursor:pointer; font-family:inherit;}
+  .jpCtl label{cursor:default; display:flex; gap:8px; align-items:center;}
+  .jpCtl input{width:64px; background:none; border:none; color:var(--gold); font-size:14px; font-family:inherit; text-align:center;}
+  #jpPlay{border-color:var(--gold); color:var(--gold); margin-left:auto;}
+  .jpPreset:hover{border-color:var(--blue); color:var(--blue);}
+  .jp .hint{margin:4px 0 0;}
 </style>
 </head>
 <body>
@@ -74,12 +89,29 @@
 
   <div class="tunes" id="tunes"></div>
 
+  <!-- 簡譜即興台（v1.10.00，Roy：「3.1415926，圓周率當樂譜！我想要輸入簡譜就能發音」） -->
+  <section class="jp">
+    <h2 data-t="jp.title"></h2>
+    <div class="jpRow">
+      <textarea id="jpText" rows="3" spellcheck="false">3.14159265358979323846264338327950288419716939937510</textarea>
+    </div>
+    <div class="jpRow jpCtl">
+      <button class="jpPreset" data-v="3.14159265358979323846264338327950288419716939937510" data-t="jp.pi"></button>
+      <button class="jpPreset" data-v="2.71828182845904523536028747135266249775724709369995" data-t="jp.e"></button>
+      <button class="jpPreset" data-v="1.61803398874989484820458683436563811772030917980576" data-t="jp.phi"></button>
+      <label><span data-t="jp.bpm"></span> <input id="jpBpm" type="number" min="40" max="300" value="120"></label>
+      <button id="jpPlay" data-t="jp.play"></button>
+    </div>
+    <div class="hint" data-t="jp.hint"></div>
+  </section>
+
 <script src="config.js"></script>
 <script src="strings.zh.js"></script>
 <script src="musician.js"></script>
 <script src="designer-panel.js"></script>
 <script>
 applyText(CONFIG); applyStaticText();
+const JIANPU_IDX=-2;   // 簡譜即興台的虛擬曲目索引（不在 TUNES 裡）
 
 /* 音色雙模式（v1.09.00，Roy：「允許玩家完全不選。也許在音色右邊做個切換開關？」）：
    指揮關（預設）＝單選——點哪個換哪個，快速比音色；
@@ -96,7 +128,7 @@ Musician.voices.forEach(v=>{
     if(mixMode){ activeVoices.has(v)?activeVoices.delete(v):activeVoices.add(v); }
     else activeVoices=new Set([v]);
     paintVoices();
-    if(playingIdx>=0)playTune(playingIdx);
+    if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx);
   };
   voicesEl.appendChild(b);
 });
@@ -107,7 +139,7 @@ mixBtn.onclick=()=>{
   if(!mixMode && activeVoices.size!==1)   // 收回單選：留最左邊亮著的那顆；全暗就回預設鋼琴
     activeVoices=new Set([Musician.voices.find(v=>activeVoices.has(v))||'piano']);
   paintVoices();
-  if(playingIdx>=0)playTune(playingIdx);
+  if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx);
 };
 voicesEl.appendChild(mixBtn);
 function paintVoices(){
@@ -188,12 +220,36 @@ function handleEnd(i){
   else if(playMode==='shuffle') playTune(nextShuffle());
   else mark(-1);
 }
-function playTune(i){
+function playLibrary(i){
   if(!activeVoices.size){ Musician.stop(); mark(-1); return; }   // 全關＝靜場
   Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,onend:()=>handleEnd(i)});
   mark(i);
 }
 stopBtn.onclick=()=>{Musician.stop();mark(-1);};
+
+/* 簡譜即興台：貼字串→Musician.fromJianpu→用當前編制演奏。JIANPU_IDX 是虛擬索引，
+   讓 mark()／playMode 的邏輯不用知道它不在 TUNES 裡（循環模式照樣重播、隨機模式跳回曲庫） */
+let jpTune=null;
+function playJianpu(){
+  const text=document.getElementById('jpText').value;
+  const bpm=Math.max(40,Math.min(300,+document.getElementById('jpBpm').value||120));
+  jpTune=Musician.fromJianpu(text,{bpm,name:TEXT['jp.name']});
+  if(!jpTune.notes.length||!activeVoices.size){ Musician.stop(); mark(-1); return; }
+  Musician.play(jpTune,{voice:[...activeVoices],cfg:CONFIG,onend:()=>{
+    if(playMode==='loop') playJianpu();
+    else if(playMode==='shuffle') playTune(nextShuffle());
+    else mark(-1);
+  }});
+  playingIdx=JIANPU_IDX;
+  tunesEl.querySelectorAll('.tune,.chip').forEach(x=>x.classList.remove('playing'));
+  nowEl.textContent=TEXT['ui.playing'](jpTune.name+'：'+text.trim().slice(0,24)+(text.trim().length>24?'…':''));
+  stopBtn.style.display='';
+}
+document.getElementById('jpPlay').onclick=playJianpu;
+document.getElementById('jpText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();playJianpu();} });
+document.querySelectorAll('.jpPreset').forEach(b=>b.onclick=()=>{document.getElementById('jpText').value=b.dataset.v; playJianpu();});
+// 播放中換音色／拉面板／循環時，索引是即興台就重播它，否則走曲庫
+function playTune(i){ return i===JIANPU_IDX ? playJianpu() : playLibrary(i); }
 
 /* 混音師面板（v1.08.01 全開放；v1.09.00 正名，Roy：「我稱為混音的其實是指揮家，
    指揮家面板其實是混音師面板XD」——選樂器上場＝指揮（音色列的「指揮」開關），
@@ -215,7 +271,7 @@ initDesignerPanel(CONFIG,{
   theme:{ bg:'#12152a', text:'#e8e4d8', accent:'#d4a94a', accent2:'#7ea7d8',
           field:'#1a1e38', line:'#2a2f52', muted:'#8a8fa8', danger:'#c05555' },
   /* 音色參數改了要重按才聽得到（整首是預先排程的）——播放中就自動重按同一首 */
-  onChange:()=>{ if(playingIdx>=0)playTune(playingIdx); },
+  onChange:()=>{ if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx); },
 });
 </script>
 </body>
