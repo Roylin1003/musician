@@ -8,7 +8,9 @@
        beats ＝ 只播前 N 拍（辨認遊戲的「猜歌難度」就是這個數字）；省略＝整首
        onend ＝ 播完呼叫（自然結束才叫，stop() 打斷不叫）
      Musician.stop()
-     Musician.fromJianpu('3.1415926', {bpm, base, name})  → tune（簡譜字串直接變曲，語法見函式註解）
+     Musician.fromJianpu('3.1415926', {bpm, base, name, radix:16, hexMode})  → tune（簡譜字串直接變曲）
+     Musician.toJianpu(tune)  → {base, tokens:[{d,acc,oct,beats,at,sec,dur}], seconds}（顯示用）
+     Musician.position()      → 目前播到第幾秒（沒在播 -1）
 
    排程：整首一次排進 WebAudio 絕對時間軸（取樣級準確）。代價是播放中改音色參數
    不會即時生效，要重按——調參工作流是「拉旋鈕→重按同一首」，可接受。
@@ -51,6 +53,7 @@ const Musician = (() => {
   };
 
   let actx=null, master=null, endTimer=null, limiter=null;
+  let curT0=0, curLen=0;   // 這次播放的絕對起點與長度（秒）——position() 用，UI 靠它高亮簡譜
   /* 防削波保險（v1.06.00，Roy：「耳機聽咚咚聲會破音」）：所有聲音過一顆壓縮器再出門。
      多聲部＋回聲＋襯底的瞬時總和很容易超過 1.0，超過就是硬削波＝破音；
      壓縮器把峰值軟著陸。每個 AudioContext 建一次，常駐 */
@@ -144,22 +147,38 @@ const Musician = (() => {
      根音預設第 3 八度（v1.06.00，Roy：「每個版本都有低沉的咚咚聲」「耳機聽會破音」——
      原本掛第 2 八度＝65Hz，耳機放得出來、筆電喇叭放不出來，低頻能量疊上旋律就削波；
      rootOct 是旋鈕，要更沉自己拉回 2） */
-  function chordVoice(key,t,dur,out,P){
+  function chordVoice(key,t,dur,out,P,ratio){
     const r=chordRoot(key);
     const ro=Math.round(P.rootOct==null?3:P.rootOct);
     const notes=[r+ro].concat(TRIAD[key].map(n=>n+(NOTE_BASE[n]<NOTE_BASE[r]?'4':'3')));
     notes.forEach((nm,i)=>{
-      const hz=noteHz(nm); if(!hz)return;
+      const hz=noteHz(nm)*(ratio||1); if(!hz)return;
       osc(i===0?'sine':'triangle',hz,t,dur,i===0?P.root:P.triad,P.attack,t+dur*0.98,out);
     });
   }
 
   function stop(){
+    curT0=0; curLen=0;
     if(endTimer){ clearTimeout(endTimer); endTimer=null; }
     if(schedTimer){ clearTimeout(schedTimer); schedTimer=null; }
     if(master){ try{master.disconnect();}catch(e){} master=null; }  // 已排程的音一起切掉
   }
   let schedTimer=null;
+
+  /* 低音折疊（v1.11.00，Roy：「有些音色似乎太低……我不知道怎麼修」）。
+     診斷：從管弦／鋼琴 MIDI 抽「同格最高音」時，旋律休息的空檔會抽到伴奏軌——
+     給愛麗絲因此跨到 G#2、晨歌出現 C1（32Hz，聽不見但會讓喇叭悶住）。
+     floorMidi 以下的音整顆往上折八度（可折多次）直到進範圍，旋律線就回到一個音域內。
+     **不改曲庫資料**：關掉即還原，所以可以 A/B 比對再決定要不要固化。
+     只折旋律——襯底本來就該在下面 */
+  function foldUp(midi, floorMidi){
+    if(!floorMidi) return midi;
+    while(midi < floorMidi) midi += 12;
+    return midi;
+  }
+  const midiOf = n => { const m=/^([A-G])(#?)([0-9])$/.exec(n);
+    return m ? 12*(+m[3]+1)+NOTE_BASE[m[1]]+(m[2]?1:0) : 0; };
+  const hzOfMidi = m => 440*Math.pow(2,(m-69)/12);
 
   function play(tune, opts={}){
     stop();
@@ -193,6 +212,10 @@ const Musician = (() => {
       return {v, P, out};
     });
 
+    /* 全域移調（v1.11.00，Roy：「有些音色似乎太低……可是我不知道怎麼修」）：
+       半音數，旋律與襯底一起移，和聲關係不變。整首偏低就整首搬上去，不用改資料 */
+    const xpose=Math.round(cfg.play.transpose||0), ratio=Math.pow(2,xpose/12);
+
     // 襯底厚度：取各層音色中最大的 padScale（有任何一層要地板就給地板；全是水晶＝無襯底）
     const pad = Math.max(...buses.map(b=>b.P.padScale==null?1:b.P.padScale));
     const CH = { root:cfg.chord.root*pad, triad:cfg.chord.triad*pad, attack:cfg.chord.attack,
@@ -207,7 +230,7 @@ const Musician = (() => {
       for(const c of tune.chords){
         if(cb>=cap)break;
         const at=ct, dur=c[1]*beat, key=c[0];
-        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH)});
+        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH,ratio)});
         ct+=dur; cb+=c[1];
       }
     }
@@ -219,7 +242,7 @@ const Musician = (() => {
       if(barLen<=0)return;
       if(autoChord && barNames.length){
         const at=barT, dur=barLen*beat, key=chordFor(barNames);
-        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH)});
+        events.push({at, run:()=>chordVoice(key,t0+at,dur,master,CH,ratio)});
       }
       barT+=barLen*beat; barNames=[]; barLen=0;
     };
@@ -227,8 +250,8 @@ const Musician = (() => {
       if(played>=cap)break;
       const dur=n[1]*beat;
       if(n[0]){
-        const at=t, hz=noteHz(n[0]);
-        events.push({at, run:()=>buses.forEach(b=>VOICES[b.v](hz,t0+at,dur,b.out,b.P))});
+        const at=t, hz=hzOfMidi(foldUp(midiOf(n[0]), Math.round(cfg.play.floorMidi||0)));
+        events.push({at, run:()=>buses.forEach(b=>VOICES[b.v](hz*ratio,t0+at,dur,b.out,b.P))});
         barNames.push(n[0][0]);
       }
       t+=dur; played+=n[1]; barLen+=n[1];
@@ -247,6 +270,7 @@ const Musician = (() => {
     };
     pump();
 
+    curT0=t0; curLen=t;
     if(opts.onend) endTimer=setTimeout(opts.onend,(t0+t-actx.currentTime)*1000);
     return t;   // 這一次播放的長度（秒），呼叫端排 UI 用
   }
@@ -260,11 +284,26 @@ const Musician = (() => {
        8 9  圓周率的數字裡本來就會出現，當作 1 與 2 的高八度（8=1̇、9=2̇）——數字當譜的慣例
      其餘字元（小數點以外的標點、字母、換行）一律略過，所以「3.1415926」貼進來直接能唱 */
   const DEGREE={1:0,2:2,3:4,4:5,5:7,6:9,7:11, 8:12, 9:14};
+  /* 16 進位模式（v1.11.00，Roy：「簡譜能不能用 16 進位制？」）：0–F 十六個符號各給一個音。
+     兩種對應——`scale`（預設）走音階梯，C 大調往上十六個音階音（兩個八度多兩階），
+     隨便一串雜湊都還在調上；`chroma` 走半音階（忠於進位制，但無調性、比較前衛）。
+     16 進位模式下 0 是音不是休止、b 是數字不是降記號（其餘語法糖照舊） */
+  const HEX_SCALE=[0,2,4,5,7,9,11,12,14,16,17,19,21,23,24,26];
   function fromJianpu(text, opts={}){
     const base=opts.base==null?4:opts.base;          // 1 落在第幾八度（C4＝中央 C）
+    const hex=+opts.radix===16, hexMode=opts.hexMode||'scale';
     const notes=[]; let oct=0, acc=0;
     const NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-    for(const ch of String(text)){
+    const push=semi=>{
+      const midi=12*(base+1)+semi+12*oct, m=((midi%12)+12)%12;
+      notes.push([NAMES[m]+(Math.floor(midi/12)-1), 1]); oct=0; acc=0;
+    };
+    for(const ch0 of String(text)){
+      const ch=ch0;
+      if(hex){
+        const v=parseInt(ch,16);
+        if(!isNaN(v)&&/^[0-9a-fA-F]$/.test(ch)){ push(hexMode==='chroma'?v:HEX_SCALE[v]); continue; }
+      }
       if(ch==='^'||ch==="'"){oct++;continue;}
       if(ch==='_'||ch===','){oct--;continue;}
       if(ch==='#'){acc=1;continue;}
@@ -284,5 +323,42 @@ const Musician = (() => {
              chords:opts.chords===undefined?false:opts.chords, notes };
   }
 
-  return { play, stop, noteHz, fromJianpu, voices:Object.keys(VOICES) };
+  /* tune → 簡譜 token（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）。
+     每個 token：{d 音級字元, acc 升降, oct 八度偏移（＋高／－低，UI 畫點）,
+                  beats 拍數, at 起拍, sec 起秒, dur 秒, i 原始 notes 索引}
+     **這也是「音太低」的診斷儀**：低八度在簡譜上就是數字底下的點，一排點就是一排低音。
+     base 自動挑：讓最多音落在無點的中央八度（多數曲子＝C4，移調過的曲子也讀得順） */
+  const SEMI2JP=[['1',''],['1','#'],['2',''],['2','#'],['3',''],['4',''],['4','#'],
+                 ['5',''],['5','#'],['6',''],['6','#'],['7','']];
+  function toJianpu(tune, opts={}){
+    const beat=60/(tune.bpm||120);
+    const floorMidi=Math.round(opts.floorMidi||0);   // 跟播放套同一條規則，否則看到的跟聽到的不一樣
+    const midis=tune.notes.filter(n=>n[0]).map(n=>foldUp(midiOf(n[0]),floorMidi));
+    let base=opts.base;
+    if(base==null){   // 中位數所在的八度當中央，點最少
+      const sorted=midis.slice().sort((a,b)=>a-b);
+      const mid=sorted.length?sorted[Math.floor(sorted.length/2)]:60;
+      base=Math.floor(mid/12)-1;
+    }
+    const out=[]; let at=0, si=0;
+    tune.notes.forEach((n,i)=>{
+      const beats=n[1];
+      if(n[0]){
+        const midi=foldUp(midiOf(n[0]),floorMidi);
+        const rel=midi-12*(base+1), oct=Math.floor(rel/12), jp=SEMI2JP[((rel%12)+12)%12];
+        out.push({d:jp[0], acc:jp[1], oct, beats, at, sec:si, dur:beats*beat, i});
+      } else out.push({d:'0', acc:'', oct:0, beats, at, sec:si, dur:beats*beat, i});
+      at+=beats; si+=beats*beat;
+    });
+    return { base, beat, tokens:out, seconds:si };
+  }
+
+  /* 目前播到第幾秒（相對曲首）；沒在播回 -1。UI 每幀問它決定高亮哪一顆 */
+  function position(){
+    if(!actx||!curT0) return -1;
+    const p=actx.currentTime-curT0;
+    return (p<0||p>curLen+0.5) ? -1 : p;
+  }
+
+  return { play, stop, noteHz, fromJianpu, toJianpu, position, voices:Object.keys(VOICES) };
 })();

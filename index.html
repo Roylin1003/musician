@@ -58,6 +58,31 @@
   .chip.playing{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
   .tune.playing .name{color:var(--gold);}
 
+  .score{width:min(820px,100%); margin-bottom:18px;}
+  .scoreHead{display:flex; gap:12px; align-items:baseline; margin-bottom:6px;}
+  .scoreHead>span:first-child{font-size:13px; color:var(--gold); letter-spacing:1px;
+                              flex:none; white-space:nowrap;}
+  .scoreHead .hint{margin:0; font-size:11.5px;}
+  .scoreStrip{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    height:70px; padding:14px 12px; overflow-x:auto; overflow-y:hidden;
+    white-space:nowrap; font-family:Consolas,"Noto Sans Mono",monospace;
+    scrollbar-width:thin;
+  }
+  .scoreStrip .empty{color:var(--muted); font-size:13px; font-family:"Noto Sans TC",sans-serif;}
+  /* 一顆音一個 span：八度點用 ::before／::after 畫（attr 取內容），不多開節點 */
+  .jn{position:relative; display:inline-block; min-width:1.15em; text-align:center;
+      font-size:19px; color:var(--text); padding:6px 3px; transition:color .08s;}
+  .jn::before{content:attr(data-up); position:absolute; top:-5px; left:0; right:0;
+              font-size:11px; line-height:1; color:inherit; opacity:.75;}
+  .jn::after{content:attr(data-dn); position:absolute; bottom:-4px; left:0; right:0;
+             font-size:11px; line-height:1; color:inherit; opacity:.75;}
+  .jn.short{text-decoration:underline; text-underline-offset:5px;}
+  .jn.rest{color:var(--muted);}
+  .jn.on{color:var(--gold); font-weight:700; text-shadow:0 0 12px rgba(212,169,74,.6);}
+  .jn.done{color:var(--muted); opacity:.55;}
+  .jn.low{color:#c98a8a;}   /* 低八度以下自己變色——「太低」用看的就找得到 */
+
   .jp{width:min(820px,100%); margin-top:40px; border-top:1px solid var(--line); padding-top:24px;}
   .jp h2{font-size:18px; color:var(--gold); letter-spacing:1px; margin-bottom:12px;}
   .jpRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
@@ -68,6 +93,8 @@
   .jpCtl button,.jpCtl label{background:var(--panel); color:var(--text); border:1px solid var(--line);
           border-radius:999px; padding:7px 16px; font-size:14px; cursor:pointer; font-family:inherit;}
   .jpCtl label{cursor:default; display:flex; gap:8px; align-items:center;}
+  .jpCtl select{background:var(--panel); color:var(--gold); border:none; font-size:14px;
+                font-family:inherit; cursor:pointer;}
   .jpCtl input{width:64px; background:none; border:none; color:var(--gold); font-size:14px; font-family:inherit; text-align:center;}
   #jpPlay{border-color:var(--gold); color:var(--gold); margin-left:auto;}
   .jpPreset:hover{border-color:var(--blue); color:var(--blue);}
@@ -87,6 +114,12 @@
     <button id="stopBtn" data-t="ui.stop" style="display:none"></button>
   </div>
 
+  <!-- 簡譜條（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）——也是「音太低」的診斷儀 -->
+  <section class="score">
+    <div class="scoreHead"><span data-t="score.title"></span><span class="hint" id="scoreHint"></span></div>
+    <div class="scoreStrip" id="scoreStrip"></div>
+  </section>
+
   <div class="tunes" id="tunes"></div>
 
   <!-- 簡譜即興台（v1.10.00，Roy：「3.1415926，圓周率當樂譜！我想要輸入簡譜就能發音」） -->
@@ -99,6 +132,17 @@
       <button class="jpPreset" data-v="3.14159265358979323846264338327950288419716939937510" data-t="jp.pi"></button>
       <button class="jpPreset" data-v="2.71828182845904523536028747135266249775724709369995" data-t="jp.e"></button>
       <button class="jpPreset" data-v="1.61803398874989484820458683436563811772030917980576" data-t="jp.phi"></button>
+      <button class="jpPreset" data-v="DEADBEEF CAFEBABE 8BADF00D" data-radix="16" data-t="jp.hex"></button>
+      <label><span data-t="jp.radix"></span>
+        <select id="jpRadix">
+          <option value="10" data-t="jp.radix10"></option>
+          <option value="16" data-t="jp.radix16"></option>
+        </select>
+        <select id="jpHexMode" style="display:none">
+          <option value="scale" data-t="jp.hexScale"></option>
+          <option value="chroma" data-t="jp.hexChroma"></option>
+        </select>
+      </label>
       <label><span data-t="jp.bpm"></span> <input id="jpBpm" type="number" min="40" max="300" value="120"></label>
       <button id="jpPlay" data-t="jp.play"></button>
     </div>
@@ -185,6 +229,65 @@ TUNES.map((tu,i)=>({tu,i}))
   tunesEl.appendChild(b);
 });
 
+/* ── 簡譜條（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）──────────
+   renderScore() 把 tune 轉成一排 span（一顆音一個節點，八度點走 CSS ::before/::after
+   的 attr()，2600 音的小夜曲也只有 2600 個節點）；tickScore() 每幀問引擎播到第幾秒，
+   只動「上一顆」與「這一顆」兩個 class，不重畫整條。
+   低八度以下的音自己染紅——Roy：「有些音色似乎太低」，這樣就看得到是哪幾顆 */
+const stripEl=document.getElementById('scoreStrip'), scoreHintEl=document.getElementById('scoreHint');
+let scoreTokens=[], scoreNodes=[], scoreOn=-1, scoreRAF=0;
+function clearScore(msg){
+  cancelAnimationFrame(scoreRAF); scoreRAF=0;
+  scoreTokens=[]; scoreNodes=[]; scoreOn=-1;
+  stripEl.innerHTML='<span class="empty"></span>';
+  stripEl.firstChild.textContent=msg||TEXT['score.empty'];
+  scoreHintEl.textContent='';
+}
+function renderScore(tune){
+  const jp=Musician.toJianpu(tune,{floorMidi:CONFIG.play.floorMidi});
+  scoreTokens=jp.tokens; scoreOn=-1;
+  const frag=document.createDocumentFragment();
+  const dots=n=>'˙'.repeat(Math.min(Math.abs(n),3));
+  for(const t of jp.tokens){
+    const el=document.createElement('span');
+    el.className='jn'+(t.d==='0'?' rest':'')+(t.beats<1?' short':'')+(t.oct<0?' low':'');
+    if(t.oct>0) el.dataset.up=dots(t.oct);
+    if(t.oct<0) el.dataset.dn=dots(t.oct);
+    // 兩拍以上補簡譜的延長線（最多三根，長音不佔滿整條）
+    el.textContent=t.acc+t.d+(t.beats>=2?' –'.repeat(Math.min(Math.round(t.beats)-1,3)):'');
+    frag.appendChild(el);
+  }
+  stripEl.innerHTML=''; stripEl.appendChild(frag);
+  scoreNodes=[...stripEl.children];
+  stripEl.scrollLeft=0;
+  const lows=jp.tokens.filter(t=>t.d!=='0'&&t.oct<0).length;
+  scoreHintEl.textContent=TEXT['score.hint']+(lows?'　｜　這首有 '+lows+' 顆低八度音（紅色）':'');
+  if(!scoreRAF) scoreRAF=requestAnimationFrame(tickScore);
+}
+function tickScore(){
+  scoreRAF=0;
+  const pos=Musician.position();
+  if(pos<0){ if(scoreOn>=0&&scoreNodes[scoreOn]) scoreNodes[scoreOn].classList.remove('on'); scoreOn=-1; return; }
+  let i=(scoreOn>=0&&scoreTokens[scoreOn]&&pos>=scoreTokens[scoreOn].sec)?scoreOn:0;
+  while(i+1<scoreTokens.length && scoreTokens[i+1].sec<=pos) i++;   // 從上次位置往前走，不必每幀搜整首
+  if(i!==scoreOn){
+    if(scoreOn>=0&&scoreNodes[scoreOn]){ scoreNodes[scoreOn].classList.remove('on'); scoreNodes[scoreOn].classList.add('done'); }
+    const el=scoreNodes[i];
+    if(el){
+      el.classList.add('on'); el.classList.remove('done');
+      const r=el.offsetLeft-stripEl.scrollLeft;          // 快到右緣就把它拉回三分之一處
+      if(r>stripEl.clientWidth*0.75||r<0) stripEl.scrollLeft=el.offsetLeft-stripEl.clientWidth*0.33;
+    }
+    scoreOn=i;
+  }
+  scoreRAF=requestAnimationFrame(tickScore);
+}
+/* 分頁隱藏時瀏覽器不跑 rAF；回到前景要自己接回去（否則簡譜停在離開時那一顆） */
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden && scoreTokens.length && Musician.position()>=0 && !scoreRAF)
+    scoreRAF=requestAnimationFrame(tickScore);
+});
+
 function mark(i){
   playingIdx=i;
   /* v1.09.01 顯示歧義修正（Roy：「長笛版跳到小星星，但出來的不是小星星」——
@@ -221,11 +324,11 @@ function handleEnd(i){
   else mark(-1);
 }
 function playLibrary(i){
-  if(!activeVoices.size){ Musician.stop(); mark(-1); return; }   // 全關＝靜場
+  if(!activeVoices.size){ Musician.stop(); mark(-1); clearScore(); return; }   // 全關＝靜場
   Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,onend:()=>handleEnd(i)});
-  mark(i);
+  mark(i); renderScore(TUNES[i]);
 }
-stopBtn.onclick=()=>{Musician.stop();mark(-1);};
+stopBtn.onclick=()=>{Musician.stop();mark(-1);clearScore();};
 
 /* 簡譜即興台：貼字串→Musician.fromJianpu→用當前編制演奏。JIANPU_IDX 是虛擬索引，
    讓 mark()／playMode 的邏輯不用知道它不在 TUNES 裡（循環模式照樣重播、隨機模式跳回曲庫） */
@@ -233,8 +336,11 @@ let jpTune=null;
 function playJianpu(){
   const text=document.getElementById('jpText').value;
   const bpm=Math.max(40,Math.min(300,+document.getElementById('jpBpm').value||120));
-  jpTune=Musician.fromJianpu(text,{bpm,name:TEXT['jp.name']});
-  if(!jpTune.notes.length||!activeVoices.size){ Musician.stop(); mark(-1); return; }
+  const radix=+document.getElementById('jpRadix').value||10;
+  const hexMode=document.getElementById('jpHexMode').value;
+  jpTune=Musician.fromJianpu(text,{bpm,radix,hexMode,name:TEXT['jp.name']});
+  if(!jpTune.notes.length||!activeVoices.size){ Musician.stop(); mark(-1); clearScore(); return; }
+  renderScore(jpTune);
   Musician.play(jpTune,{voice:[...activeVoices],cfg:CONFIG,onend:()=>{
     if(playMode==='loop') playJianpu();
     else if(playMode==='shuffle') playTune(nextShuffle());
@@ -247,7 +353,17 @@ function playJianpu(){
 }
 document.getElementById('jpPlay').onclick=playJianpu;
 document.getElementById('jpText').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();playJianpu();} });
-document.querySelectorAll('.jpPreset').forEach(b=>b.onclick=()=>{document.getElementById('jpText').value=b.dataset.v; playJianpu();});
+const radixSel=document.getElementById('jpRadix'), hexSel=document.getElementById('jpHexMode');
+function paintRadix(){ hexSel.style.display=radixSel.value==='16'?'':'none'; }
+radixSel.onchange=()=>{ paintRadix(); if(playingIdx===JIANPU_IDX)playJianpu(); };
+hexSel.onchange=()=>{ if(playingIdx===JIANPU_IDX)playJianpu(); };
+paintRadix();
+document.querySelectorAll('.jpPreset').forEach(b=>b.onclick=()=>{
+  document.getElementById('jpText').value=b.dataset.v;
+  radixSel.value=b.dataset.radix||'10'; paintRadix();   // π 是十進位、DEADBEEF 是十六進位，按了自動切
+  playJianpu();
+});
+clearScore();   // 開頁先給一句提示，不要空白框
 // 播放中換音色／拉面板／循環時，索引是即興台就重播它，否則走曲庫
 function playTune(i){ return i===JIANPU_IDX ? playJianpu() : playLibrary(i); }
 
@@ -258,7 +374,7 @@ function playTune(i){ return i===JIANPU_IDX ? playJianpu() : playLibrary(i); }
 initDesignerPanel(CONFIG,{
   gate:false, title:'混音師面板',
   labels:{
-    play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦',
+    play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦', transpose:'移調半音', floorMidi:'低音折疊(MIDI)',
     voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴', strings:'弦樂', flute:'長笛',
     release:'收音秒', detune:'失諧音分', brightness:'亮度倍數', woody:'木頭味',
     vibRate:'顫音頻率', vibDepth:'顫音深度', rootOct:'根音八度',
