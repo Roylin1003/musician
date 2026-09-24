@@ -53,7 +53,7 @@ const Musician = (() => {
   };
 
   let actx=null, master=null, endTimer=null, limiter=null;
-  let curT0=0, curLen=0;   // 這次播放的絕對起點與長度（秒）——position() 用，UI 靠它高亮簡譜
+  let curT0=0, curLen=0, curTail=0;   // 這次播放的絕對起點與長度（秒）——position() 用，UI 靠它高亮簡譜
   /* 防削波保險（v1.06.00，Roy：「耳機聽咚咚聲會破音」）：所有聲音過一顆壓縮器再出門。
      多聲部＋回聲＋襯底的瞬時總和很容易超過 1.0，超過就是硬削波＝破音；
      壓縮器把峰值軟著陸。每個 AudioContext 建一次，常駐 */
@@ -237,7 +237,7 @@ const Musician = (() => {
     const autoChord = cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
     const BAR = tune.chordBars || cfg.play.chordBars;
 
-    let t=0, played=0, barT=0, barNames=[], barLen=0;
+    let t=0, played=0, barT=0, barNames=[], barLen=0, lastDur=0;
     const flushBar=()=>{
       if(barLen<=0)return;
       if(autoChord && barNames.length){
@@ -251,6 +251,7 @@ const Musician = (() => {
       const dur=n[1]*beat;
       if(n[0]){
         const at=t, hz=hzOfMidi(foldUp(midiOf(n[0]), Math.round(cfg.play.floorMidi||0)));
+        lastDur=dur;
         events.push({at, run:()=>buses.forEach(b=>VOICES[b.v](hz*ratio,t0+at,dur,b.out,b.P))});
         barNames.push(n[0][0]);
       }
@@ -260,7 +261,7 @@ const Musician = (() => {
     flushBar();
     events.sort((a,b)=>a.at-b.at);   // 和聲事件與旋律事件交錯，排一次
 
-    const HORIZON=5;   // 秒；look-ahead 窗
+    const HORIZON=10;  // 秒；look-ahead 窗（拉到 10 秒：背景分頁的 setTimeout 會被節流，多一倍緩衝）
     let idx=0;
     const pump=()=>{
       schedTimer=null;
@@ -270,8 +271,19 @@ const Musician = (() => {
     };
     pump();
 
-    curT0=t0; curLen=t;
-    if(opts.onend) endTimer=setTimeout(opts.onend,(t0+t-actx.currentTime)*1000);
+    /* 尾音緩衝（v1.12.00，Roy：「有時候覺得某些歌沒唱完就下一首」）。
+       `t` 只是音符時值的總和，但最後一顆音實際還在響：水晶的 ring 是 3.5 倍音長、
+       回聲鏈還要再拖幾輪。onend 若照 t 觸發，下一首的 stop() 就把尾音硬切——
+       實測小星星水晶版被切掉 1.44 秒、搖籃曲 1.88 秒。改成等尾音真的消失才換曲。
+       上限 4 秒：曲子之間不該留出一段空白 */
+    const tail=Math.min(4, Math.max(0, ...buses.map(b=>{
+      const P=b.P;
+      return (P.ring ? lastDur*(Math.max(1,P.ring)-1) : 0)
+           + (P.release || 0.05)
+           + (P.echoTime>0 ? P.echoTime*4 : 0);      // 回授 0.45^4≈4%，已經聽不見
+    })));
+    curT0=t0; curLen=t+tail; curTail=tail;
+    if(opts.onend) endTimer=setTimeout(opts.onend,(t0+t+tail-actx.currentTime)*1000);
     return t;   // 這一次播放的長度（秒），呼叫端排 UI 用
   }
 
@@ -360,5 +372,7 @@ const Musician = (() => {
     return (p<0||p>curLen+0.5) ? -1 : p;
   }
 
-  return { play, stop, noteHz, fromJianpu, toJianpu, position, voices:Object.keys(VOICES) };
+  return { play, stop, noteHz, fromJianpu, toJianpu, position,
+           tail:()=>curTail,   // 上一次播放算出的尾音緩衝（秒）——自檢台用它守這條回歸
+           voices:Object.keys(VOICES) };
 })();
