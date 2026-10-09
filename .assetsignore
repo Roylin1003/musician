@@ -1,0 +1,5 @@
+# 2026-10-09：線上 /.git/HEAD 回 200（私人 repo 歷史公開）。這個 repo 從根目錄部署，先擋掉不該上線的；執行期檔案照舊。
+.git
+.git/**
+README.md
+LICENSE
