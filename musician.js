@@ -8,6 +8,8 @@
        beats ＝ 只播前 N 拍（辨認遊戲的「猜歌難度」就是這個數字）；省略＝整首
        onend ＝ 播完呼叫（自然結束才叫，stop() 打斷不叫）
      Musician.stop()
+     多聲部：tune 帶 parts:[{name,voice,vol,pan,mute,solo,shift,offset,rep,notes|jp}] 就走分部路徑
+       （呼叫方式不變）；Musician.setPart(i,{vol,mute,solo}) 播放中即時調軌（見 playParts）
      Musician.fromJianpu('3.1415926', {bpm, base, name, radix:16, hexMode})  → tune（簡譜字串直接變曲）
      Musician.toJianpu(tune)  → {base, tokens:[{d,acc,oct,beats,at,sec,dur}], seconds}（顯示用）
      Musician.position()      → 目前播到第幾秒（沒在播 -1）
@@ -49,7 +51,13 @@ const Musician = (() => {
              crystal:{oct:2,main:0.34,shimmer:0.16,sparkle:0.30,attack:0.002,ring:3.5,padScale:0,echoTime:0.30,echoFb:0.45,echoMix:0.60},
              piano:{h1:0.7,h2:0.35,h3:0.12,h4:0.05,attack:0.008},
              strings:{gain:0.07,attack:0.12,release:0.20,detune:7,brightness:4},
-             flute:{gain:0.22,woody:0.12,attack:0.06,release:0.12,vibRate:5,vibDepth:9} },
+             flute:{gain:0.22,woody:0.12,attack:0.06,release:0.12,vibRate:5,vibDepth:9},
+             brass:{gain:0.10,attack:0.07,release:0.12,bright:5,detune:4},
+             choir:{gain:0.10,attack:0.25,release:0.30,vowel1:800,vowel2:1150,vibRate:5,vibDepth:12},
+             timpani:{gain:0.70,drop:1.35,dropTime:0.07,decay:1.1,thump:0.5},
+             harp:{gain:0.35,decay:1.8,h2:0.4,h3:0.15},
+             shamisen:{gain:0.55,decay:1.0,bright:0.85,sawari:3,bachi:0.25},
+             guzheng:{gain:0.55,decay:2.6,bright:0.45,vibDelay:0.25,vibRate:5.5,vibDepth:18} },
     chord: { root:0.30, triad:0.13, attack:0.18 },
   };
 
@@ -154,7 +162,162 @@ const Musician = (() => {
         o.connect(g); g.connect(out); o.start(t); o.stop(t+dur+0.05);
       });
     },
+    /* ── 多聲部用的四個新音色（v1.15.00，Master 的史詩配樂）──
+       素材庫 D:\game_art 沒有可演奏的管弦取樣（只有音效與成品配樂），所以這四個一樣是合成。
+       銅管：鋸齒波＋低通濾波「漸開」（嘴唇起振，亮度隨氣息打開）——銅管的靈魂是亮度包絡不是音量 */
+    brass(hz,t,dur,out,P){
+      const f=actx.createBiquadFilter(); f.type='lowpass'; f.connect(out);
+      f.frequency.setValueAtTime(hz*1.2,t);
+      f.frequency.linearRampToValueAtTime(Math.min(hz*P.bright,12000),t+P.attack+0.10);
+      [-P.detune,P.detune].forEach(dt=>{
+        const o=actx.createOscillator(), g=actx.createGain();
+        o.type='sawtooth'; o.frequency.value=hz; o.detune.value=dt;
+        const rel=Math.min(P.release,dur*0.4), sus=Math.max(t+P.attack,t+dur-rel);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(P.gain,Math.min(t+P.attack,t+dur*0.5));
+        g.gain.setValueAtTime(P.gain,sus);
+        g.gain.linearRampToValueAtTime(0,t+dur);
+        o.connect(g); g.connect(f); o.start(t); o.stop(t+dur+0.05);
+      });
+    },
+    /* 合唱：三把失諧鋸齒（人群）過兩個帶通濾波＝「啊」的母音共振峰（vowel1/vowel2 Hz）；
+       慢起音＋顫音。vowel 改成 400/800 是「喔」，300/2300 是「衣」 */
+    choir(hz,t,dur,out,P){
+      const lfo=actx.createOscillator(), lg=actx.createGain();
+      lfo.frequency.value=P.vibRate; lg.gain.value=P.vibDepth; lfo.connect(lg); lfo.start(t); lfo.stop(t+dur+0.05);
+      const mix=actx.createGain();
+      [P.vowel1,P.vowel2].forEach(fc=>{
+        const b=actx.createBiquadFilter(); b.type='bandpass'; b.frequency.value=fc; b.Q.value=5;
+        mix.connect(b); b.connect(out);
+      });
+      [-9,0,9].forEach(dt=>{
+        const o=actx.createOscillator(), g=actx.createGain();
+        o.type='sawtooth'; o.frequency.value=hz; o.detune.value=dt; lg.connect(o.detune);
+        const peak=P.gain*3, rel=Math.min(P.release,dur*0.4), sus=Math.max(t+P.attack,t+dur-rel);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(peak,Math.min(t+P.attack,t+dur*0.5));
+        g.gain.setValueAtTime(peak,sus);
+        g.gain.linearRampToValueAtTime(0,t+dur);
+        o.connect(g); g.connect(mix); o.start(t); o.stop(t+dur+0.05);
+      });
+    },
+    /* 定音鼓：正弦從 drop 倍音高快速滑到本音（皮面被敲的瞬間張力）＋一小口低通噪音（槌擊）；
+       衰減由 decay 管、不跟音符長度走（鼓敲了就響那麼久） */
+    timpani(hz,t,dur,out,P){
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(hz*P.drop,t);
+      o.frequency.exponentialRampToValueAtTime(hz,t+P.dropTime);
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(P.gain,t+0.004);
+      g.gain.exponentialRampToValueAtTime(0.0008,t+P.decay);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t+P.decay+0.05);
+      if(P.thump>0){
+        if(!noiseBuf){ noiseBuf=actx.createBuffer(1,Math.floor(actx.sampleRate*0.06),actx.sampleRate);
+          const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; }
+        const n=actx.createBufferSource(), nf=actx.createBiquadFilter(), ng=actx.createGain();
+        n.buffer=noiseBuf; nf.type='lowpass'; nf.frequency.value=500;
+        ng.gain.setValueAtTime(P.gain*P.thump,t); ng.gain.exponentialRampToValueAtTime(0.0008,t+0.06);
+        n.connect(nf); nf.connect(ng); ng.connect(out); n.start(t);
+      }
+    },
+    // 豎琴：撥弦——瞬間起音、基音＋2/3 倍泛音，指數衰減（decay 秒，不跟音符長度走）
+    harp(hz,t,dur,out,P){
+      [[1,P.gain,1],[2,P.gain*P.h2,0.55],[3,P.gain*P.h3,0.35]].forEach(([m,pk,k])=>
+        osc('sine',hz*m,t,P.decay*k+0.05,pk,0.003,t+P.decay*k,out));
+    },
+    /* ── 撥弦兩兄弟（v1.18.00，Master：「三味線版！古箏版！」）──
+       Karplus-Strong 撥弦合成：一小段雜訊在長度＝一個週期的環裡反覆平均，高頻先死、基音留下——
+       這就是真的弦被撥開後的物理樣子。比加法合成（豎琴）更像「撥」。
+       bright＝平均的比例（1＝不平均＝金屬感長亮；0.4＝溫潤）；decay＝60dB 衰減秒數。
+       三味線：亮、短，過一顆 tanh 失真＝さわり（sawari，琴頸的嗡嗡震）＋撥子（bachi）擊皮的「啪」；
+       古箏：暗一點、長餘韻，發音後 vibDelay 秒開始揉弦（左手按弦的顫音，detune LFO）。 */
+    shamisen(hz,t,dur,out,P){
+      const src=pluck(hz,P,'sh'), sh=actx.createWaveShaper(), g=actx.createGain();
+      sh.curve=sawariCurve(P.sawari); g.gain.value=P.gain;
+      src.connect(sh); sh.connect(g); g.connect(out); src.start(t); src.stop(t+P.decay);
+      if(P.bachi>0){
+        if(!noiseBuf){ noiseBuf=actx.createBuffer(1,Math.floor(actx.sampleRate*0.06),actx.sampleRate);
+          const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; }
+        const n=actx.createBufferSource(), hp=actx.createBiquadFilter(), ng=actx.createGain();
+        n.buffer=noiseBuf; hp.type='highpass'; hp.frequency.value=1800;
+        ng.gain.setValueAtTime(P.gain*P.bachi,t); ng.gain.exponentialRampToValueAtTime(0.0008,t+0.03);
+        n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+      }
+    },
+    guzheng(hz,t,dur,out,P){
+      const src=pluck(hz,P,'gz'), g=actx.createGain();
+      g.gain.value=P.gain; src.connect(g); g.connect(out);
+      const lfo=actx.createOscillator(), lg=actx.createGain();
+      lfo.frequency.value=P.vibRate; lg.gain.setValueAtTime(0,t);
+      lg.gain.linearRampToValueAtTime(P.vibDepth,t+P.vibDelay+0.3);   // 揉弦是發音後才開始
+      lfo.connect(lg); lg.connect(src.detune); lfo.start(t); lfo.stop(t+P.decay);
+      src.start(t); src.stop(t+P.decay);
+    },
   };
+  /* Karplus-Strong 緩衝：同音高＋同參數算一次就快取（一顆音 1～3 秒的 Float32）。
+     環長取整數會走音，用 playbackRate 補回：實測週期＝N－(1－bright)/2 取樣（平均濾波讀的是「下一格」，週期變短；
+     scratch 驗算 b=0.85/0.45/0 × N=109/54 全吻合到 0.01 取樣）。
+     ponytail: 快取上限 96 筆、滿了整個清掉；要更省就改 LRU */
+  const ksCache=new Map();
+  function pluck(hz,P,tag){
+    const sr=actx.sampleRate, sh=(1-P.bright)/2, N=Math.max(2,Math.round(sr/hz+sh)), per=N-sh;
+    const key=tag+N+'|'+P.decay+'|'+P.bright;
+    let buf=ksCache.get(key);
+    if(!buf){
+      if(ksCache.size>96) ksCache.clear();
+      const len=Math.floor(sr*P.decay), loopG=Math.pow(0.001,1/((sr/per)*P.decay)), b=P.bright;
+      buf=actx.createBuffer(1,len,sr); const d=buf.getChannelData(0), ring=new Float32Array(N);
+      for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
+      for(let i=0,p=0;i<len;i++){ const cur=ring[p], nxt=ring[(p+1)%N];
+        d[i]=cur; ring[p]=(b*cur+(1-b)*0.5*(cur+nxt))*loopG; p=(p+1)%N; }
+      ksCache.set(key,buf);
+    }
+    const src=actx.createBufferSource(); src.buffer=buf;
+    src.playbackRate.value=hz*per/sr;
+    return src;
+  }
+
+  /* ── 真樂器取樣（v1.19.00，Master：「真實樂器的音色取樣……可以重新搜尋嗎」）──
+     素材庫 D:\game_art 沒有可演奏的樂器單音；改用 VSCO 2 Community Edition（Versilian Studios，CC0）
+     50 取樣精簡包，轉成 samples/vsco/*.mp3（檔名＝實測 MIDI 音高）。
+     setSamples(CONFIG.samples, 'samples/vsco/') 把每組取樣註冊成一個音色：挑最近的取樣、playbackRate 移調。
+     perc:true＝打擊組（音級挑樂器：1 定音鼓低 2 定音鼓 3 小鼓 4 小鼓滾奏 5 銅鈸 6 鑼 7 吊鈸漸強，原速不移調）；
+     oneShot:true＝敲／撥一下就讓它自然響完（豎琴、馬林巴），其餘照音符長度＋release 收音。
+     載入是非同步的：play() 發現要用的取樣還沒到，就先下載、到了再自動開播（期間 position() 回 0）。 */
+  const sampleBank={}; let sampleBase='', pendingTok=0, pending=false;
+  function setSamples(defs, base){
+    sampleBase=base||'';
+    for(const id in (defs||{})){ sampleBank[id]={def:defs[id]}; VOICES[id]=(hz,t,dur,out,P)=>playSample(id,hz,t,dur,out,P); }
+  }
+  function loadSample(id){
+    const b=sampleBank[id]; if(b.p) return b.p;
+    return b.p=Promise.all(b.def.files.map(([f,m])=>fetch(sampleBase+f).then(r=>{ if(!r.ok) throw new Error(f+' '+r.status); return r.arrayBuffer(); })
+        .then(a=>actx.decodeAudioData(a)).then(buf=>({midi:m,buf}))))
+      .then(list=>{ b.bufs=list.sort((x,y)=>x.midi-y.midi); b.ready=true; })
+      .catch(e=>{ b.p=null; console.warn('[Musician] 取樣載入失敗：'+id, e); throw e; });
+  }
+  function playSample(id,hz,t,dur,out,P){
+    const b=sampleBank[id]; if(!b||!b.ready) return;
+    const def=b.def, midi=69+12*Math.log2(hz/440);
+    let s, rate=1;
+    if(def.perc){ const deg=[0,0,1,1,2,3,3,4,4,5,5,6][((Math.round(midi)%12)+12)%12]; s=b.bufs[deg%b.bufs.length]; }
+    else { s=b.bufs.reduce((a,c)=>Math.abs(c.midi-midi)<Math.abs(a.midi-midi)?c:a); rate=Math.pow(2,(midi-s.midi)/12); }
+    const src=actx.createBufferSource(), g=actx.createGain();
+    src.buffer=s.buf; src.playbackRate.value=rate;
+    const full=s.buf.duration/rate, rel=P.release||0.2;
+    g.gain.setValueAtTime(P.gain,t);
+    if(def.perc||def.oneShot){ src.start(t); src.stop(t+full); }
+    else { const end=t+Math.min(dur,full); g.gain.setValueAtTime(P.gain,Math.max(t,end-0.01));
+      g.gain.exponentialRampToValueAtTime(0.0008,end+rel); src.start(t); src.stop(Math.min(t+full,end+rel+0.05)); }
+    src.connect(g); g.connect(out);
+  }
+  const sawariCache={};
+  function sawariCurve(k){
+    if(sawariCache[k]) return sawariCache[k];
+    const c=new Float32Array(1024); for(let i=0;i<1024;i++){ const x=i/511.5-1; c[i]=Math.tanh(k*x)/Math.tanh(k); }
+    return sawariCache[k]=c;
+  }
+
+  let noiseBuf=null;
 
   /* 襯底：根音＋三和弦（三角波、很薄），慢起音不搶旋律前緣。
      根音預設第 3 八度（v1.06.00，Roy：「每個版本都有低沉的咚咚聲」「耳機聽會破音」——
@@ -171,7 +334,7 @@ const Musician = (() => {
   }
 
   function stop(){
-    curT0=0; curLen=0;
+    curT0=0; curLen=0; pendingTok++; pending=false;
     if(endTimer){ clearTimeout(endTimer); endTimer=null; }
     if(schedTimer){ clearTimeout(schedTimer); schedTimer=null; }
     if(master){ try{master.disconnect();}catch(e){} master=null; }  // 已排程的音一起切掉
@@ -193,6 +356,79 @@ const Musician = (() => {
     return m ? 12*(+m[3]+1)+NOTE_BASE[m[1]]+(m[2]?1:0) : 0; };
   const hzOfMidi = m => 440*Math.pow(2,(m-69)/12);
 
+  /* ── 多聲部（v1.15.00，Master 的史詩配樂；藍圖 💡「真交響」兌現）──
+     tune.parts = [{ name, voice, vol, pan, mute, solo, shift, offset, rep, notes | jp }]
+       notes：同單旋律格式 [[音名,拍數],…]；jp：簡譜字串（引擎現場轉 notes，Master 直接貼譜）
+       shift：整軌移調半音　offset：晚幾拍進場　rep：整軌重複幾遍（低音節奏型的 4 小節寫一次）
+     每軌自己一條時間線、自己一個音量／左右位置閘，所以「疊加與對位」＝各軌各寫各的。
+     不配自動和聲（分部本身就是和聲）；沒有 parts 的舊曲走原路徑，一個字節都沒動。
+     ponytail: 分部路徑不掛水晶的回聲匯流排（天花板；要的話把 play() 的 buses 邏輯抽出來共用） */
+  let partBus=[];
+  function partGain(i){
+    const any=partBus.some(b=>b.solo);
+    const b=partBus[i]; return (any ? b.solo : !b.mute) ? b.vol : 0;
+  }
+  function setPart(i, st){          // 播放中即時生效：{vol, mute, solo}
+    const b=partBus[i]; if(!b) return;
+    Object.assign(b, st);
+    partBus.forEach((x,j)=>x.g.gain.setTargetAtTime(partGain(j), actx.currentTime, 0.02));
+  }
+  function playParts(tune, opts, cfg){
+    const beat=60/(tune.bpm||cfg.play.bpm), cap=opts.beats||Infinity, t0=actx.currentTime+0.08;
+    const xpose=Math.round(cfg.play.transpose||0), ratio=Math.pow(2,xpose/12);
+    master=actx.createGain();
+    master.gain.value=cfg.play.volume/Math.sqrt(tune.parts.length);
+    master.connect(ensureLimiter());
+    const events=[]; let total=0, tail=0;
+    partBus=tune.parts.map((p,i)=>{
+      const v=VOICES[p.voice]?p.voice:'piano', P=(cfg.voices&&cfg.voices[v])||FALLBACK.voices[v];
+      const g=actx.createGain(); let out=g;
+      if(actx.createStereoPanner){ const pn=actx.createStereoPanner(); pn.pan.value=p.pan||0; g.connect(pn); pn.connect(master); }
+      else g.connect(master);
+      const src=p.notes||fromJianpu(p.jp||'').notes;
+      const shiftR=Math.pow(2,(p.shift||0)/12);
+      let t=(p.offset||0)*beat, played=(p.offset||0), lastDur=0;
+      for(let r=0;r<(p.rep||1);r++) for(const n of src){
+        if(played>=cap)break;
+        const dur=n[1]*beat;
+        if(n[0]){ const at=t, hz=hzOfMidi(midiOf(n[0]))*ratio*shiftR; lastDur=dur;
+          events.push({at, run:()=>VOICES[v](hz,t0+at,dur,out,P)}); }
+        t+=dur; played+=n[1];
+      }
+      total=Math.max(total,t);
+      tail=Math.max(tail,(P.release||P.decay||0.05)+(P.ring?lastDur*(Math.max(1,P.ring)-1):0));
+      const b={g, vol:p.vol==null?1:p.vol, mute:!!p.mute, solo:!!p.solo};
+      return b;
+    });
+    partBus.forEach((b,j)=>b.g.gain.value=partGain(j));
+    events.sort((a,b)=>a.at-b.at);
+    const HORIZON=10; let idx=0;
+    const pump=()=>{
+      schedTimer=null;
+      const until=actx.currentTime-t0+HORIZON;
+      while(idx<events.length && events[idx].at<=until){ events[idx].run(); idx++; }
+      if(idx<events.length) schedTimer=setTimeout(pump,1000);
+    };
+    pump();
+    tail=Math.min(4,tail);
+    curT0=t0; curLen=total+tail; curTail=tail;
+    if(opts.onend) endTimer=setTimeout(opts.onend,(t0+total+tail-actx.currentTime)*1000);
+    return total;
+  }
+
+
+  /* 單音即時發聲（v1.21.00，電腦鍵盤當琴彈）：不打斷正在播的曲子，自己一條 gain 直通壓縮器。
+     取樣音色第一次用到要先下載，到了才響（那一下會晚一點） */
+  function noteNow(midi, opts={}){
+    if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; } }
+    if(actx.state==='suspended') actx.resume().catch(()=>{});
+    const cfg=opts.cfg||FALLBACK, v=VOICES[opts.voice]?opts.voice:'piano';
+    const go=()=>{ const P=(cfg.voices&&cfg.voices[v])||FALLBACK.voices[v], g=actx.createGain();
+      g.gain.value=cfg.play.volume; g.connect(ensureLimiter());
+      VOICES[v](hzOfMidi(midi), actx.currentTime+0.01, opts.dur||0.4, g, P); };
+    if(sampleBank[v]&&!sampleBank[v].ready) loadSample(v).then(go,()=>{}); else go();
+  }
+
   function play(tune, opts={}){
     stop();
     if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return 0; } }
@@ -200,6 +436,15 @@ const Musician = (() => {
        停在 suspended，那時排程照走但一點聲音也沒有。resume 是每次播放的保險。 */
     if(actx.state==='suspended') actx.resume().catch(()=>{});
     const cfg   = opts.cfg || FALLBACK;
+    const used=(Array.isArray(tune.parts)?tune.parts.map(p=>p.voice):[].concat(opts.voice||'crystal'))
+      .filter(v=>sampleBank[v]&&!sampleBank[v].ready);
+    if(used.length){                      // 取樣還沒到：先下載，到了再自動開播（中途 stop() 或換曲就作廢）
+      const tok=++pendingTok; pending=true;
+      Promise.all(used.map(loadSample)).then(()=>{ if(tok===pendingTok){ pending=false; play(tune,opts); } },
+                                             ()=>{ if(tok===pendingTok) pending=false; });
+      return 0;
+    }
+    if(Array.isArray(tune.parts)) return playParts(tune, opts, cfg);
     /* v1.08.00 疊奏混音（Roy：「有沒有可能讓音色同時作用，自己混音？」）：
        voice 可以是字串或陣列，同一條旋律每個音色各奏一層（管弦樂法的 doubling）。
        這不是交響樂——交響是分部各司其職，那需要多聲部曲譜（見藍圖 💡）；
@@ -295,7 +540,7 @@ const Musician = (() => {
     const tail=Math.min(4, Math.max(0, ...buses.map(b=>{
       const P=b.P;
       return (P.ring ? lastDur*(Math.max(1,P.ring)-1) : 0)
-           + (P.release || 0.05)
+           + (P.release || P.decay || 0.05)
            + (P.echoTime>0 ? P.echoTime*4 : 0);      // 回授 0.45^4≈4%，已經聽不見
     })));
     curT0=t0; curLen=t+tail; curTail=tail;
@@ -374,8 +619,8 @@ const Musician = (() => {
       if(n[0]){
         const midi=foldUp(midiOf(n[0]),floorMidi);
         const rel=midi-12*(base+1), oct=Math.floor(rel/12), jp=SEMI2JP[((rel%12)+12)%12];
-        out.push({d:jp[0], acc:jp[1], oct, beats, at, sec:si, dur:beats*beat, i});
-      } else out.push({d:'0', acc:'', oct:0, beats, at, sec:si, dur:beats*beat, i});
+        out.push({d:jp[0], acc:jp[1], oct, beats, at, sec:si, dur:beats*beat, i, midi});
+      } else out.push({d:'0', acc:'', oct:0, beats, at, sec:si, dur:beats*beat, i, midi:null});
       at+=beats; si+=beats*beat;
     });
     return { base, beat, tokens:out, seconds:si };
@@ -383,13 +628,17 @@ const Musician = (() => {
 
   /* 目前播到第幾秒（相對曲首）；沒在播回 -1。UI 每幀問它決定高亮哪一顆 */
   function position(){
+    if(pending) return 0;                 // 取樣下載中：當作停在開頭
     if(!actx||!curT0) return -1;
     const p=actx.currentTime-curT0;
-    return (p<0||p>curLen+0.5) ? -1 : p;
+    /* 開播前 0.08 秒的預備拍（t0＝currentTime+0.08）p 會是負的：回 0 不是 -1。
+       舊寫法回 -1，UI 的 rAF 迴圈第一幀就看到「沒在播」而永久退出——簡譜／長條圖開頭不跟著跑（Master 2026-10-16 回報） */
+    return p>curLen+0.5 ? -1 : Math.max(0,p);
   }
 
-  return { play, stop, noteHz, fromJianpu, toJianpu, position,
+  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, toJianpu, position,
            setMuted, get muted(){ return userMuted; },
            tail:()=>curTail,   // 上一次播放算出的尾音緩衝（秒）——自檢台用它守這條回歸
-           voices:Object.keys(VOICES) };
+           get voices(){ return Object.keys(VOICES); },
+           isSampled:v=>!!sampleBank[v] };
 })();

@@ -20,3 +20,9 @@
 
 /designer-panel.js
   Cache-Control: public, max-age=0, must-revalidate
+
+/composer.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/composer.js
+  Cache-Control: public, max-age=0, must-revalidate

@@ -1,7 +1,7 @@
 /* config.js —— Musician 音樂家引擎：數值本體（F5 生效）
    版號 x.yy.zz：x＝設計哲學、yy＝功能、zz＝介面。唯一出處在這裡。 */
 const CONFIG = {
-  version: '1.13.01',   // 1.13.01：手機版音色列改 3×2 等寬格子（原本一字一行、左右被切出畫面）
+  version: '1.21.00',   // 1.21.00：電腦鍵盤當琴（數字＝白鍵、Q 排＝黑鍵、0 休止）；1.20.00：曲庫→多聲部→創作台；簡譜即興台併入積木編輯器；1.19.01：取樣音量正規化（峰值 -1dB，原檔太小聲＝聽起來沒聲音）＋script 版號；1.19.00：真樂器取樣 13 組（VSCO 2 CE，CC0）；1.18.00：三味線／古箏（Karplus-Strong 撥弦）；1.15.00：多聲部引擎＋四新音色（銅管／合唱／定音鼓／豎琴）＋ORCH_TUNES；   // 1.14.00：曲庫 +國旗歌（17 首）；1.13.01：手機版音色列改 3×2 等寬格子（原本一字一行、左右被切出畫面）
 
   play: {
     volume: 0.5,      // 總音量（master gain）
@@ -43,6 +43,26 @@ const CONFIG = {
     strings: { gain: 0.07, attack: 0.12, release: 0.20, detune: 7, brightness: 4 },
     /* 長笛（v1.05.00）：正弦＋2 倍泛音一點木頭味＋顫音 LFO（vibRate 次/秒、vibDepth 音分） */
     flute:   { gain: 0.22, woody: 0.12, attack: 0.06, release: 0.12, vibRate: 5, vibDepth: 9 },
+    /* 多聲部用四音色（v1.15.00）。素材庫沒有管弦取樣，全部合成。
+       brass：bright＝低通打開的倍數（越大越亮越吼）；choir：vowel1/2＝母音共振峰 Hz（800/1150＝「啊」）；
+       timpani：drop＝起擊音高倍數、dropTime＝滑音秒、decay＝餘響秒、thump＝槌擊噪音量；
+       harp：decay＝餘音秒、h2/h3＝泛音量 */
+    brass:   { gain: 0.10, attack: 0.07, release: 0.12, bright: 5, detune: 4 },
+    choir:   { gain: 0.10, attack: 0.25, release: 0.30, vowel1: 800, vowel2: 1150, vibRate: 5, vibDepth: 12 },
+    timpani: { gain: 0.70, drop: 1.35, dropTime: 0.07, decay: 1.1, thump: 0.5 },
+    harp:    { gain: 0.35, decay: 1.8, h2: 0.4, h3: 0.15 },
+    /* 撥弦（v1.18.00，Karplus-Strong）：decay＝餘音秒、bright＝亮度 0~1（1＝金屬長亮）。
+       三味線 sawari＝琴頸嗡嗡震的失真量、bachi＝撥子擊皮聲；古箏 vib*＝揉弦（vibDelay 秒後開始） */
+    shamisen: { gain: 0.55, decay: 1.0, bright: 0.85, sawari: 3, bachi: 0.25 },
+    guzheng:  { gain: 0.55, decay: 2.6, bright: 0.45, vibDelay: 0.25, vibRate: 5.5, vibDepth: 18 },
+    /* 真樂器取樣（v1.19.00）：只有音量與收音秒兩顆旋鈕；檔案對照在下面的 SAMPLES */
+    r_vln:   { gain: 0.9, release: 0.25 }, r_cello: { gain: 0.9, release: 0.3 },
+    r_trem:  { gain: 0.8, release: 0.25 }, r_tbn:   { gain: 0.8, release: 0.2 },
+    r_tuba:  { gain: 0.9, release: 0.2 },  r_tpt:   { gain: 0.7, release: 0.2 },
+    r_flute: { gain: 0.8, release: 0.2 },  r_oboe:  { gain: 0.7, release: 0.2 },
+    r_bsn:   { gain: 0.9, release: 0.2 },  r_harp:  { gain: 0.9, release: 0.3 },
+    r_mar:   { gain: 0.9, release: 0.3 },  r_glock: { gain: 0.6, release: 0.3 },
+    r_perc:  { gain: 0.9, release: 0.3 },
   },
 
   /* 和聲襯底：根音（正弦）＋三和弦（三角波），慢起音坐在旋律下面。
@@ -1160,4 +1180,111 @@ const TUNES = [
     ['C5',2],['A4',.5],['F4',.5],['G4',2],['E4',.5],['C4',.5],['F4',1],['G4',1],
     ['A4',1],['E4',.25],['G4',1.75],['C4',.5],['C4',.5],['C5',2],['A4',.5],['F4',.5],
     ['G4',2],['E4',.5],['C4',.5],['F4',1],['G4',.25],['E4',.75],['D4',1],['C4',2]]},
+
+  /* 中華民國國旗歌（黃自作曲，1930 年代；黃自 1938 歿，公版）。C 大調 4/4，20 小節 80 拍。
+     v1.14.00 入庫：旋律由維基百科〈中華民國國旗歌〉頁內嵌的 LilyPond 譜原始碼逐音轉出
+     （擷取 2026-10-14），程式驗過 20 小節每小節都剛好 4 拍。
+     **待 Master 聽過確認**：①速度——來源譜與頁面都沒標速度，bpm:76 是莊嚴升旗速度的暫定值；
+     ②音高與節奏整首是單一網路譜源（維基）轉錄，尚未對第二份官方譜，請 Master 耳判。
+     C 大調，自動和聲（C/F/G/G7）適用，不另帶 chords */
+  { id:'flagsong', orig:"National Flag Anthem of the Republic of China", name:'中華民國國旗歌', composer:'黃自', bpm:76, notes:[
+    ['E4',1],['C4',.75],['E4',.25],['G4',1],['G4',1],['C5',1],['B4',.75],['A4',.25],
+    ['A4',1],['G4',1],['A4',1],['G4',1],['G4',1],['E4',.75],['C4',.25],['F4',.75],
+    ['F4',.25],['E4',1],['D4',2],['E4',1],['C4',.75],['D4',.25],['E4',1],['G4',1],
+    ['C5',1],['B4',.75],['A4',.25],['A4',1],['G4',1],['A4',1],['G4',1],['G4',1],
+    ['F4',.5],['E4',.5],['D4',.75],['E4',.25],['D4',1],['C4',2],['D4',1.5],['E4',.5],
+    ['F4',1],['F4',1],['A4',1],['A4',.75],['A4',.25],['G4',.75],['F4',.25],['E4',1],
+    ['E4',1.5],['G4',.5],['C5',1],['C5',1],['D5',.75],['C5',.25],['B4',.5],['A4',.5],
+    ['G4',2],['E5',1.5],['E5',.5],['D5',.75],['C5',.25],['B4',1],['D5',1.5],['C5',.5],
+    ['B4',.75],['A4',.25],['G4',1],['C5',1],['C5',.5],['G4',.5],['A4',.5],['G4',.5],
+    ['F4',.5],['E4',.5],['D4',1],['E4',.75],['F4',.25],['E4',2],['E5',1.5],['E5',.5],
+    ['D5',.75],['C5',.25],['B4',1],['D5',1.5],['C5',.5],['B4',.75],['A4',.25],['G4',1],
+    ['C5',1],['C5',.5],['G4',.5],['B4',.5],['A4',.5],['G4',.5],['F4',.5],['E4',1],
+    ['F4',.75],['D4',.25],['C4',2]]},
 ];
+
+
+/* ── 多聲部曲庫 ORCH_TUNES（v1.15.00）──────────────────────────
+   與 TUNES 分開：沒有 notes、只有 parts，試聽台的「多聲部」區專用，遊戲端 Musician.play 同樣吃。
+   每軌 jp＝簡譜字串（語法見 musician.js fromJianpu）；Master 直接貼譜，不必轉音名。
+   軌欄位：name／voice／vol／pan(-1~1)／shift(半音)／offset(晚幾拍)／rep(重複遍數)。 */
+const ORCH_TUNES = [
+  { id:'epic-am', name:'史詩 Am（Master 手寫）', composer:'Master Roy', bpm:84, parts:[
+    { name:'低音節奏', voice:'timpani', vol:0.7, pan:0, shift:-12, rep:2,
+      jp:'_6/_6/_6/_6/_6/_6/_6/_6/ | _6/_6/_6/_6/_6/_6/_6/_6/ | _4/_4/_4/_4/_4/_4/_4/_4/ | _5/_5/_5/_5/_5/_5/_5/_5/' },
+    { name:'主旋律', voice:'brass', vol:0.8, pan:-0.2,
+      jp:'3-6- | ^1-65 | 3-5- | 2-57 | 3-6- | ^1-^4- | ^3^2^1 7 | 6---' },
+    { name:'琶音', voice:'harp', vol:0.6, pan:0.35,
+      jp:'46^1- | 5^1^3- | 7^2^5- | 6-^3- | ^4-^3^1 | ^3-^2^1 | ^2-75 | 5--0' },
+    { name:'領奏', voice:'choir', vol:0.6, pan:0.15, shift:-12,
+      jp:'^3-^6- | ^^1-^6^5 | ^3-^5- | ^2-^5^7 | ^3-^6- | ^^1-^^3- | ^^2^^1^7^5 | ^6---' },
+    { name:'尾奏低音', voice:'strings', vol:0.8, pan:-0.4, offset:32,
+      jp:'_6-3- | _4-6- | _5-7- | _6---' },
+  ] },
+];
+
+/* ── 積木編輯器 COMPOSER（v1.16.00；composer.html）──────────────
+   和弦積木＋樂句積木，音全鎖在調內。邏輯（積木怎麼展開成音）在 composer.js，
+   這裡只放「有哪些積木、叫什麼、預設值」。
+   chords：pc＝根音半音（C=0）、q＝和弦音相對根音的半音。
+   patterns：id 對應 composer.js 的 PATTERNS；group 只是調色盤分欄。
+   defaults：新曲預設值（小節數、速度、軌）。軌的 oct＝根音所在八度。 */
+const COMPOSER = {
+  bars: 8, bpm: 84, maxBars: 32,
+  chords: [
+    { id:'Am', name:'Am', pc:9,  q:[0,3,7]  }, { id:'F',  name:'F',  pc:5,  q:[0,4,7]  },
+    { id:'C',  name:'C',  pc:0,  q:[0,4,7]  }, { id:'G',  name:'G',  pc:7,  q:[0,4,7]  },
+    { id:'Dm', name:'Dm', pc:2,  q:[0,3,7]  }, { id:'Em', name:'Em', pc:4,  q:[0,3,7]  },
+    { id:'E',  name:'E',  pc:4,  q:[0,4,7]  }, { id:'G7', name:'G7', pc:7,  q:[0,4,7,10] },
+  ],
+  patterns: [
+    { id:'eighths',  name:'八分連打', emoji:'🥁', group:'節奏' },
+    { id:'quarters', name:'每拍一下', emoji:'🥁', group:'節奏' },
+    { id:'roll',     name:'滾奏',     emoji:'🥁', group:'節奏' },
+    { id:'hit',      name:'重擊',     emoji:'💥', group:'節奏' },
+    { id:'rootfifth',name:'根音＋五度',emoji:'🎵', group:'節奏' },
+    { id:'whole',    name:'長音·根音', emoji:'➖', group:'長音' },
+    { id:'third',    name:'長音·三度', emoji:'➖', group:'長音' },
+    { id:'fifth',    name:'長音·五度', emoji:'➖', group:'長音' },
+    { id:'arpUp',    name:'琶音·上行', emoji:'🎼', group:'琶音' },
+    { id:'arpDown',  name:'琶音·下行', emoji:'🎼', group:'琶音' },
+    { id:'arpWave',  name:'琶音·來回', emoji:'🎼', group:'琶音' },
+  ],
+  tracks: [
+    { name:'低音節奏', voice:'timpani', oct:2, vol:0.7, pan:0 },
+    { name:'旋律',     voice:'brass',   oct:4, vol:0.8, pan:-0.2, kind:'melody' },   // kind:'melody'＝旋律軌（調內音格子，第 0 列＝oct 的 C）
+    { name:'琶音',     voice:'harp',    oct:4, vol:0.6, pan:0.35 },
+    { name:'合唱',     voice:'choir',   oct:4, vol:0.5, pan:0.15 },
+    { name:'弦樂',     voice:'strings', oct:3, vol:0.7, pan:-0.4 },
+  ],
+  // 範例：Am Am F G 兩遍；低音連打、琶音上行、其餘三軌疊成和弦長音
+  example: { chords:['Am','Am','F','G','Am','Am','F','G'],
+    tracks:[ 'eighths',null,'arpUp','fifth','third' ],
+    // 旋律軌範例＝Master 手寫的主旋律：每小節 [[第幾個八分音符(0~7), 列號(0=C4…,5=A4,7=C5)],…]
+    melody:[ [[0,2],[4,5]], [[0,7],[4,5],[6,4]], [[0,2],[4,4]], [[0,1],[4,4],[6,6]],
+             [[0,2],[4,5]], [[0,7],[4,10]], [[0,9],[2,8],[4,7],[6,6]], [[0,5]] ] },
+  // 旋律積木：steps＝一小節切幾個八分音符格，rows＝可選音高列數（C 大調／A 小調的白鍵，從該軌 oct 的 C 往上）
+  melody: { steps:8, rows:15 },   // 15 列＝兩個八度＋一階（v1.20.00 從 12 加大：簡譜匯入時常跨 1.5 個八度以上）
+};
+
+
+/* ── 真樂器取樣對照 SAMPLES（v1.19.00）──────────────────────────
+   來源：VSCO 2 Community Edition「50 Orchestral Samples」（Versilian Studios，CC0），
+   轉檔與實測音高見 samples/vsco/LICENSE.txt。[檔名, 實測 MIDI 音高]；引擎挑最近的一個移調。
+   perc：音級 1–7 依序＝定音鼓低／定音鼓／小鼓／小鼓滾奏／銅鈸／鑼／吊鈸漸強（不移調）。
+   oneShot：敲了就自然響完，不照音符長度切。 */
+const SAMPLES = {
+  r_vln:   { files:[['vln-57.mp3',57],['vln-69.mp3',69],['vln-81.mp3',81]] },
+  r_cello: { files:[['cello-36.mp3',36],['cello-60.mp3',60]] },
+  r_trem:  { files:[['trem-60.mp3',60],['trem-77.mp3',77]] },
+  r_tbn:   { files:[['tbn-46.mp3',46],['tbn-58.mp3',58]] },
+  r_tuba:  { files:[['tuba-34.mp3',34],['tuba-46.mp3',46]] },
+  r_tpt:   { files:[['tpt-77.mp3',77]] },
+  r_flute: { files:[['flute-69.mp3',69],['flute-74.mp3',74],['flute-81.mp3',81]] },
+  r_oboe:  { files:[['oboe-68.mp3',68],['oboe-74.mp3',74],['oboe-80.mp3',80]] },
+  r_bsn:   { files:[['bsn-34.mp3',34],['bsn-46.mp3',46]] },
+  r_harp:  { files:[['harp-45.mp3',45],['harp-69.mp3',69]], oneShot:true },
+  r_mar:   { files:[['mar-55.mp3',55],['mar-72.mp3',72]], oneShot:true },
+  r_glock: { files:[['glock-84.mp3',84]], oneShot:true },
+  r_perc:  { files:[0,1,2,3,4,5,6].map(i=>['perc-'+i+'.mp3',i]), perc:true },
+};

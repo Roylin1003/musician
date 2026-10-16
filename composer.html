@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>積木編輯器 · Royal Musician</title>
+<style>
+  :root{ --bg:#0e1122; --panel:#171b33; --panel2:#1d2433; --line:#2a2f52; --text:#e8e4d8;
+         --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8; --hdrW:200px; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{background:var(--bg); color:var(--text); font:18px/1.4 "Noto Sans TC","Microsoft JhengHei",sans-serif;
+       display:grid; grid-template-rows:clamp(72px,9vh,120px) 1fr; grid-template-columns:clamp(360px,22vw,560px) 1fr; overflow:hidden;}
+  button,select,input{font:inherit; color:inherit;}
+  button,select{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 16px; cursor:pointer;}
+  button:hover{border-color:var(--blue);}
+  button.on{border-color:var(--gold); color:var(--gold);}
+
+  #bar{grid-column:1/3; display:flex; align-items:center; gap:14px; padding:0 24px; background:#1c1c24; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  #bar h1{font-size:28px; color:var(--gold); letter-spacing:2px; margin-right:12px;}
+  #bar a{color:var(--muted); font-size:16px; text-decoration:none;}
+  #bar label{display:flex; gap:8px; align-items:center; color:var(--muted); font-size:16px;}
+  #bar input[type=number]{width:72px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold);}
+  #tutBtn{margin-left:auto;} #play{border-color:var(--gold); color:var(--gold); padding:8px 28px;}
+
+  /* 左欄：上＝這一步要做什麼＋積木，下＝存取工具 */
+  #palette{background:#23232e; border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0;}
+  #step{padding:12px 20px; font-size:20px; color:var(--gold); border-bottom:1px solid var(--line);}
+  #pal{flex:1; overflow-y:auto; padding:16px 20px;}
+  .grp{color:var(--muted); font-size:16px; margin:14px 0 8px;} .grp:first-child{margin-top:0;}
+  .blocks{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;}
+  .blk{min-height:72px; border-radius:12px; text-align:center; padding:10px 8px;}
+  .blk.chord{background:#2a2438; font-size:26px; font-weight:700;}
+  .blk.pat{background:var(--panel2);}
+  #tools{display:flex; flex-wrap:wrap; gap:8px; padding:14px 20px; border-top:1px solid var(--line);}
+  #tools button{padding:8px 12px; font-size:16px;}
+  .cred{width:100%; color:var(--muted); font-size:13px;}
+  #msg{color:var(--gold); font-size:15px; width:100%; min-height:20px;}
+  /* 旋律格：橫＝時間（八分音符），直＝音高（高在上） */
+  #mel{display:grid; gap:4px;}
+  #mel .lab{color:var(--muted); font-size:15px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px;}
+  #mel .col{color:var(--muted); font-size:15px; text-align:center;}
+  #mel .st{height:40px; border-radius:8px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; padding:0;}
+  #mel .st.hold{background:#3a3550; border-color:#3a3550;}
+  #mel .st.on{background:var(--gold); border-color:var(--gold);}
+  #mel .st.rest.on{background:var(--muted); border-color:var(--muted);}
+  .jpbox{margin-top:18px;} .jpbox textarea{width:100%; height:72px; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:8px; font:16px Consolas,monospace; color:var(--blue); resize:vertical;}
+  .jpbtns{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;} .jpbtns button{padding:6px 14px; font-size:16px;}
+  .cell.jpcell{justify-content:flex-start; align-items:center; flex-direction:row; gap:8px; padding:0 14px; white-space:nowrap;}
+
+  #main{display:flex; flex-direction:column; min-width:0; min-height:0;}
+  #scroller{flex:1; overflow:auto;}
+  #grid{display:grid; gap:8px; padding:12px; height:100%; grid-template-rows:32px repeat(6,minmax(72px,1fr));}
+  .cell,.hd{border-radius:12px;}
+  .ruler{color:var(--muted); font-size:18px; text-align:center; padding-top:6px; cursor:default; border-radius:8px;}
+  .ruler.now,.cell.now{outline:3px solid var(--blue);}
+  .hd{position:sticky; left:0; z-index:2; background:#23232e; border:1px solid var(--line); padding:6px 10px; overflow:hidden;
+      display:flex; flex-direction:column; justify-content:center; gap:6px; min-width:0;}
+  .hd .nm{background:none; border:none; border-bottom:1px solid var(--line); flex:1; min-width:0; font-weight:700; padding:2px;}
+  .hd .row{display:flex; gap:6px; align-items:center;}
+  .hd select{flex:1; min-width:0; padding:4px 8px; font-size:16px;}
+  .hd button{padding:4px 0; width:38px; border-radius:8px; font-size:16px;}
+  .hd input[type=range]{width:64px; flex:none;}
+  .cell{min-height:0; background:var(--panel2); border:1px solid var(--line); display:flex; flex-direction:column; align-items:center; justify-content:center;
+        text-align:center; cursor:pointer; font-size:16px; line-height:1.25; padding:4px; gap:2px; white-space:nowrap; overflow:hidden;}
+  .cell.chordc{background:#2a2438; font-size:28px; font-weight:700;}
+  .cell.empty{color:var(--muted); font-size:28px;}
+  .cell small{font:15px Consolas,monospace; color:var(--blue); word-break:break-all;}
+  .cell.sel{border-color:var(--gold); box-shadow:0 0 0 3px var(--gold) inset; animation:pulse 1.4s ease-in-out 3;}
+  @keyframes pulse{50%{box-shadow:0 0 0 7px var(--gold) inset;}}
+  /* 電腦鍵盤琴（v1.21.00）：數字排＝白鍵（簡譜 1–9）、Q 排＝黑鍵（錯半格，跟鋼琴一樣夾在中間）、0 休止 */
+  #kb{flex:none; border-top:1px solid var(--line); background:#1c1c24; padding:10px 14px; display:flex; gap:18px; align-items:center;}
+  #kb .kbl{color:var(--muted); font-size:15px; min-width:150px;}
+  #kb .kbl b{display:block; color:var(--gold); font-size:16px;}
+  #kb .keys{display:grid; grid-template-columns:repeat(21,30px); grid-template-rows:46px 46px; gap:4px 0;}
+  #kb .kc{grid-column:span 2; margin:0 2px; border-radius:7px; border:1px solid #4a4f72; border-bottom-width:3px; background:var(--panel);
+          display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1; font-size:13px; color:var(--muted); cursor:pointer; user-select:none;}
+  #kb .kc b{font-size:19px; color:var(--text);}
+  #kb .kc.bk{background:#0b0d18;} #kb .kc.bk b{color:var(--blue);}
+  #kb .kc.off{visibility:hidden;}
+  #kb .kc.hit{background:var(--gold); border-color:var(--gold);} #kb .kc.hit b,#kb .kc.hit{color:#1c1c24;}
+  #kb .side{display:flex; gap:8px;} #kb .side .kc{width:64px; height:46px; grid-column:auto;}
+  #mel .col.cur{color:var(--gold); font-weight:700;} #mel .st.cur{outline:2px solid var(--gold);}
+  @media (max-width:900px){ #kb{display:none;} }
+  /* 矮螢幕（筆電 768 高以下）：鍵帽、軌高、簡譜摺疊區讓位給格子，維持整頁不捲 */
+  @media (min-width:901px) and (max-height:760px){
+    #kb{padding:6px 14px;} #kb .keys{grid-template-rows:34px 34px;} #kb .kc b{font-size:16px;} #kb .side .kc{height:34px;}
+    #grid{grid-template-rows:28px repeat(6,minmax(60px,1fr)); gap:6px;}
+    .hd{padding:4px 8px; gap:3px;} .hd select{padding:2px 6px;} .hd button{padding:2px 0;}
+    .cell.chordc{font-size:22px;}
+    details{display:none;}
+  }
+  details{flex:none; border-top:1px solid var(--line); background:#1c1c24; padding:8px 14px;}
+  summary{cursor:pointer; color:var(--muted); font-size:16px;}
+  #jp{width:100%; height:64px; margin-top:8px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px;
+      font:16px Consolas,monospace; color:var(--blue); resize:none;}
+
+  @media (max-width:900px){
+    :root{--hdrW:150px;}
+    #grid{grid-template-rows:none; grid-auto-rows:auto;}
+    body{grid-template-columns:1fr; grid-template-rows:auto 1fr 320px; font-size:16px;}
+    #bar{grid-column:1; padding:10px 12px; gap:8px;} #bar h1{font-size:22px;}
+    #palette{grid-row:3; border-right:none; border-top:1px solid var(--line);}
+    #step{padding:8px 12px; font-size:17px;} #pal{padding:10px 12px;}
+    #tools{padding:6px 12px; flex-wrap:nowrap; overflow-x:auto;} #tools button{padding:6px 10px; font-size:15px; white-space:nowrap; flex:none;} #msg{position:absolute; bottom:60px; left:12px; width:auto; background:#1c1c24; padding:2px 8px; border-radius:6px;}
+    #main{grid-row:2;}
+    .blocks{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));}
+    .hd{padding:6px;} .hd input[type=range]{width:60px;} .cell{min-height:84px; white-space:normal;}
+    details{display:none;}
+  }
+  /* 新手教學：高亮目標＋小氣泡；做對動作自動進下一步 */
+  .tutHi{outline:4px solid var(--gold) !important; outline-offset:3px; animation:tp 1s ease-in-out infinite; position:relative; z-index:60;}
+  @keyframes tp{50%{outline-offset:8px;}}
+  #tut{position:fixed; z-index:70; max-width:340px; background:#2a2438; border:2px solid var(--gold); border-radius:14px; padding:14px 16px; font-size:18px; box-shadow:0 8px 30px #000a;}
+  #tut .tb{display:flex; gap:8px; margin-top:10px; justify-content:flex-end;}
+  #tut button{padding:6px 14px; font-size:16px;}
+  @media (max-width:900px){ #tut{max-width:280px; font-size:16px;} }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <h1 data-t="cp.title"></h1>
+    <a href="index.html" data-t="cp.back"></a>
+    <label><span data-t="cp.bpm"></span><input id="bpm" type="number" min="40" max="240"></label>
+    <button id="addBars" data-t="cp.addBars"></button><button id="delBars" data-t="cp.delBars"></button>
+    <button id="example" data-t="cp.example"></button>
+    <button id="stop" data-t="cp.stop"></button>
+    <button id="tutBtn" data-t="tut.btn"></button>
+    <button id="play" data-t="cp.play"></button>
+  </div>
+
+  <aside id="palette">
+    <div id="step"></div>
+    <div id="pal"></div>
+    <div id="tools">
+      <button id="clear" data-t="cp.clear"></button><button id="fill" data-t="cp.fill"></button>
+      <button id="save" data-t="cp.save"></button><button id="load" data-t="cp.load"></button>
+      <button id="trSave" data-t="cp.trackSave"></button><button id="trLoad" data-t="cp.trackLoad"></button>
+      <button id="exportJs" data-t="cp.export"></button><span id="msg"></span>
+      <a class="cred" href="https://versilian-studios.com/vsco-community/" target="_blank" rel="noopener" data-t="credits.samples"></a>
+      <input id="file" type="file" accept=".json" hidden>
+    </div>
+  </aside>
+
+  <section id="main">
+    <div id="scroller"><div id="grid"></div></div>
+    <div id="kb"></div>
+    <details><summary><span data-t="cp.jp"></span>：<b id="jpName"></b></summary><textarea id="jp" readonly></textarea></details>
+  </section>
+
+<script src="config.js?v=1.21.00"></script>
+<script src="strings.zh.js?v=1.21.00"></script>
+<script src="musician.js?v=1.21.00"></script>
+<script src="composer.js?v=1.21.00"></script>
+<script>
+applyText(CONFIG); applyStaticText();
+Musician.setSamples(SAMPLES, 'samples/vsco/');
+const voiceOpts = sel => { const opt = v => `<option value="${v}"${v === sel ? ' selected' : ''}>${TEXT['ui.voice.' + v]}</option>`;
+  const vs = Musician.voices; return vs.filter(v => !Musician.isSampled(v)).map(opt).join('') +
+    '<optgroup label="' + TEXT['ui.realGroup'] + '">' + vs.filter(Musician.isSampled).map(opt).join('') + '</optgroup>'; };
+const C = COMPOSER, KEY = 'composer.v2', $ = id => document.getElementById(id);
+const patOf = id => C.patterns.find(p => p.id === id), N = C.melody.steps;
+
+/* ── 狀態 ── */
+function blank(bars){ return { name:'我的配樂', bpm:C.bpm, bars, chords:Array(bars).fill(null),
+  tracks:C.tracks.map(t => ({...t, mute:false, solo:false, blocks:Array(bars).fill(null)})) }; }
+function example(){ const s = blank(C.bars); s.chords = C.example.chords.slice();
+  s.tracks.forEach((t, i) => { if(t.kind === 'melody') t.blocks = C.example.melody.map(b => { const v = Array(N).fill(null); b.forEach(([k, r]) => v[k] = r); return v; });
+    else t.blocks.fill(C.example.tracks[i]); }); return s; }
+let st; try { st = JSON.parse(localStorage.getItem(KEY)); } catch(e){}
+if(!st || !st.tracks) st = example();
+let sel = { row:-1, bar:0 }, playing = false;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch(e){} };
+const say = t => { $('msg').textContent = t; setTimeout(() => { if($('msg').textContent === t) $('msg').textContent = ''; }, 4000); };
+const trOf = () => st.tracks[Math.max(0, sel.row)];
+const mode = () => sel.row < 0 ? 'chord' : ({ melody:'melody', jp:'jp' }[st.tracks[sel.row].kind] || 'pat');
+const barText = (tr, b) => Composer.jianpu(Composer.melodyBar(tr.blocks[b], tr.oct, C)).replace(/ -/g, '');
+
+/* ── 播放 ── */
+const done = () => { playing = false; markNow(-1); };
+function replay(){ if(playing) Musician.play(Composer.expand(st, C), { cfg:CONFIG, onend:done }); }
+$('play').onclick = () => { tutNote('play'); playing = true; Musician.play(Composer.expand(st, C), { cfg:CONFIG, onend:done }); };
+$('stop').onclick = () => { Musician.stop(); done(); };
+function preview(block, chordId, tr){          // 點積木試聽：一小節
+  const one = { bars:1, bpm:st.bpm, chords:[chordId], tracks:[{...tr, mute:false, solo:false, vol:1, blocks:[block]}] };
+  playing = false; Musician.play(Composer.expand(one, C), { cfg:CONFIG });
+}
+
+/* ── 畫面 ── */
+function render(){
+  const g = $('grid'), B = st.bars;
+  g.style.gridTemplateColumns = `var(--hdrW) repeat(${B}, minmax(84px,1fr))`;
+  g.innerHTML = '';
+  const el = (cls, html) => { const d = document.createElement('div'); d.className = cls; if(html != null) d.innerHTML = html; g.appendChild(d); return d; };
+  el('ruler', '');
+  for(let b = 0; b < B; b++) el('ruler', b + 1).dataset.bar = b;
+  el('hd', '<b>和弦</b>');
+  for(let b = 0; b < B; b++) cell(-1, b, st.chords[b]);
+  st.tracks.forEach((tr, i) => {
+    const h = el('hd');
+    h.innerHTML = '<div class="row"><input class="nm" value="' + tr.name.replace(/"/g, '&quot;') + '">' +
+      '<button class="m' + (tr.mute ? ' on' : '') + '">M</button><button class="s' + (tr.solo ? ' on' : '') + '">S</button></div>' +
+      '<div class="row"><select>' + voiceOpts(tr.voice) + '</select>' +
+      '<input type="range" min="0" max="1" step="0.05" value="' + tr.vol + '"></div>';
+    h.querySelector('.nm').onchange = e => { tr.name = e.target.value; save(); };
+    h.querySelector('select').onchange = e => { tr.voice = e.target.value; save(); replay(); };
+    h.querySelector('input[type=range]').oninput = e => { tr.vol = +e.target.value; Musician.setPart(i, { vol:tr.vol }); save(); };
+    h.querySelector('.m').onclick = () => { tr.mute = !tr.mute; Musician.setPart(i, { mute:tr.mute }); save(); render(); tutNote('mute'); };
+    h.querySelector('.s').onclick = () => { tr.solo = !tr.solo; Musician.setPart(i, { solo:tr.solo }); save(); render(); tutNote('mute'); };
+    if(tr.kind === 'jp'){           // 簡譜軌：整列一格，顯示簡譜原文
+      const c = el('cell jpcell' + (sel.row === i ? ' sel' : ''), '📝 <small>' + (tr.jp || '').replace(/</g, '&lt;').slice(0, 120) + '</small>');
+      c.style.gridColumn = 'span ' + B; c.onclick = () => { sel = { row:i, bar:0 }; render(); };
+    } else for(let b = 0; b < B; b++) cell(i, b, tr.blocks[b]);
+  });
+  $('bpm').value = st.bpm; side(); jpFoot(); kbDraw(); tutShow();
+  function cell(row, b, v){
+    const melody = row >= 0 && st.tracks[row].kind === 'melody';
+    const empty = melody ? !(v && v.some(x => x != null)) : !v;
+    const label = row < 0 ? (v || '＋') : melody ? (empty ? '＋' : '🎶<small>' + barText(st.tracks[row], b) + '</small>')
+                                              : (v ? patOf(v).emoji + '<br>' + patOf(v).name : '＋');
+    const c = el('cell' + (row < 0 ? ' chordc' : '') + (empty ? ' empty' : '') + (sel.row === row && sel.bar === b ? ' sel' : ''), label);
+    c.dataset.bar = b;
+    c.onclick = () => { sel = { row, bar:b }; kbCur = row >= 0 ? { row, bar:b, step:0 } : null;
+      if(row >= 0 && st.tracks[row].kind === 'melody') kbOct = st.tracks[row].oct;   // 鍵盤八度對齊這軌格子的底
+      render(); tutNote('cell:' + row + ':' + b); };
+  }
+}
+/* 左欄：依選中的格子換內容。模式跟著選取走，不需要自己切分頁 */
+function side(){
+  const p = $('pal'), m = mode(), tr = trOf(), n = sel.bar + 1; p.innerHTML = '';
+  $('step').textContent = m === 'chord' ? `② 選和弦 → 第 ${n} 小節` : m === 'pat' ? `② 選彈法 → ${tr.name}・第 ${n} 小節` : m === 'jp' ? `② 編輯簡譜軌 → ${tr.name}` : `② 點格子排旋律 → 第 ${n} 小節`;
+  if(m === 'chord'){
+    const d = document.createElement('div'); d.className = 'blocks';
+    C.chords.forEach(c => { const b = document.createElement('button'); b.className = 'blk chord'; b.textContent = c.name;
+      b.onclick = () => put(c.id); d.appendChild(b); });
+    p.appendChild(d);
+  } else if(m === 'pat'){
+    [...new Set(C.patterns.map(x => x.group))].forEach(grp => {
+      const h = document.createElement('div'); h.className = 'grp'; h.textContent = grp; p.appendChild(h);
+      const d = document.createElement('div'); d.className = 'blocks';
+      C.patterns.filter(x => x.group === grp).forEach(x => { const b = document.createElement('button'); b.className = 'blk pat';
+        b.innerHTML = x.emoji + '<br>' + x.name; b.onclick = () => put(x.id); d.appendChild(b); });
+      p.appendChild(d);
+    });
+  } else if(m === 'jp') jpPanel(p, tr);
+  else { melodyGrid(p, tr); jpInput(p, tr); }
+}
+function melodyGrid(p, tr){
+  const v = tr.blocks[sel.bar] || (tr.blocks[sel.bar] = Array(N).fill(null)), R = C.melody.rows;
+  const g = document.createElement('div'); g.id = 'mel'; g.style.gridTemplateColumns = `44px repeat(${N}, 1fr)`;
+  const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt || ''; g.appendChild(d); return d; };
+  const curStep = kbCur && kbCur.row === sel.row && kbCur.bar === sel.bar ? kbCur.step : -1;   // 鍵盤錄音游標
+  add('lab'); for(let i = 0; i < N; i++) add('col' + (i === curStep ? ' cur' : ''), i % 2 ? '·' : i / 2 + 1);
+  // 持續中的音：某欄沒標記就續前一個音（淡色）
+  const eff = []; let cur = null; for(let i = 0; i < N; i++){ if(v[i] != null) cur = v[i]; eff[i] = cur; }
+  [...Array(R).keys()].reverse().concat(-1).forEach(r => {
+    const o = tr.oct - 4 + (r < 0 ? 0 : Math.floor(r / 7));
+    add('lab', r < 0 ? '休止' : (o > 0 ? '^'.repeat(o) : o < 0 ? '_'.repeat(-o) : '') + '1234567'[r % 7]);
+    for(let i = 0; i < N; i++){
+      const b = document.createElement('button'); b.className = 'st' + (r < 0 ? ' rest' : '');
+      if(v[i] === r) b.classList.add('on'); else if(v[i] == null && eff[i] === r) b.classList.add('hold');
+      b.onclick = () => { v[i] = v[i] === r ? null : r; save(); render(); tutNote('mel');
+        if(playing) replay(); else preview(v, null, tr); };
+      g.appendChild(b);
+    }
+  });
+  p.appendChild(g);
+}
+function put(id){                       // 把積木放進選中的格子，試聽，跳下一格
+  if(sel.row === -1) st.chords[sel.bar] = id; else trOf().blocks[sel.bar] = id;
+  const ch = sel.row === -1 ? id : st.chords[sel.bar];
+  if(playing) replay(); else if(sel.row === -1) preview('arpUp', id, { ...C.tracks[4], voice:'strings', oct:3 });
+  else if(ch) preview(id, ch, trOf());
+  if(sel.bar < st.bars - 1) sel.bar++;
+  save(); render(); tutNote('put');
+}
+function jpFoot(){
+  const i = Math.max(0, sel.row);
+  $('jpName').textContent = st.tracks[i].name;
+  $('jp').value = Composer.jianpu(Composer.expand(st, C).parts[i].notes);
+}
+/* 播放線：Musician.position() 換算成第幾小節，亮那一欄 */
+let lastNow = -2;
+function markNow(b){ if(b === lastNow) return; lastNow = b;
+  document.querySelectorAll('[data-bar]').forEach(e => e.classList.toggle('now', +e.dataset.bar === b)); }
+(function tick(){ const p = Musician.position(); markNow(p < 0 ? -1 : Math.floor(p / (240 / st.bpm))); requestAnimationFrame(tick); })();
+
+/* ── 工具 ── */
+$('bpm').onchange = e => { st.bpm = Math.max(40, Math.min(240, +e.target.value || C.bpm)); save(); replay(); };
+$('addBars').onclick = () => resize(Math.min(C.maxBars, st.bars + 4));
+$('delBars').onclick = () => resize(Math.max(4, st.bars - 4));
+function resize(n){ const fit = (a, v) => Array.from({ length:n }, (_, i) => i < a.length ? a[i] : v);
+  st.chords = fit(st.chords, null); st.tracks.forEach(t => t.blocks = fit(t.blocks, null));
+  st.bars = n; sel.bar = Math.min(sel.bar, n - 1); save(); render(); replay(); }
+$('example').onclick = () => { st = example(); sel = { row:-1, bar:0 }; save(); render(); replay(); };
+const copyOf = v => Array.isArray(v) ? v.slice() : v;
+$('clear').onclick = () => { if(sel.row === -1) st.chords[sel.bar] = null; else trOf().blocks[sel.bar] = null; save(); render(); replay(); };
+$('fill').onclick = () => { const a = sel.row === -1 ? st.chords : trOf().blocks, v = a[sel.bar];
+  if(!v || (Array.isArray(v) && !v.some(x => x != null))) return say('這格是空的，先放東西再按');
+  for(let i = 0; i < a.length; i++) a[i] = copyOf(v); save(); render(); replay(); };
+function download(name, obj){ const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 1)], { type:'application/json' })); a.download = name; a.click(); }
+function pick(cb){ const f = $('file'); f.value = ''; f.onchange = () => { const r = new FileReader();
+  r.onload = () => { try { cb(JSON.parse(r.result)); } catch(e){ say('讀不懂這個檔，請選用本編輯器存的 .json'); } }; if(f.files[0]) r.readAsText(f.files[0]); }; f.click(); }
+$('save').onclick = () => download((st.name || '配樂') + '.mix.json', { state:st });
+$('load').onclick = () => pick(j => { if(!j.state || !j.state.tracks) return say('這不是整首曲檔（.mix.json）'); st = j.state; sel = { row:-1, bar:0 }; save(); render(); });
+$('trSave').onclick = () => { const tr = trOf(); if(sel.row < 0) return say('先點某一軌的格子，再存這軌');
+  download(tr.name + '.part.json', { part:{ name:tr.name, kind:tr.kind, voice:tr.voice, oct:tr.oct, vol:tr.vol, pan:tr.pan, blocks:tr.blocks } }); };
+$('trLoad').onclick = () => { if(sel.row < 0) return say('先點要放進哪一軌，再載入');
+  pick(j => { const p = j.part, tr = trOf(); if(!p) return say('這不是單軌檔（.part.json）');
+    if((p.kind === 'melody') !== (tr.kind === 'melody')) return say('旋律軌只能載入旋律軌的檔');
+    Object.assign(tr, { name:p.name, voice:p.voice, oct:p.oct, vol:p.vol, pan:p.pan });
+    tr.blocks = Array.from({ length:st.bars }, (_, k) => copyOf(p.blocks[k]) || null); save(); render(); replay(); }); };
+$('exportJs').onclick = () => {
+  const js = 'const MY_TUNE = ' + JSON.stringify(Composer.expand(st, C)) + ';\n// 遊戲裡：Musician.play(MY_TUNE, { cfg:CONFIG })（需要 musician.js 與 CONFIG.voices）';
+  (navigator.clipboard ? navigator.clipboard.writeText(js) : Promise.reject()).then(() => say(TEXT['cp.exported']), () => { prompt('複製這段：', js); });
+};
+/* ── 新手教學：七步，每步高亮一個東西，做對動作就自動下一步；第一次來自動開 ── */
+const cellEl = (row, b) => document.querySelectorAll('.cell')[(row + 1) * st.bars + b];
+const TUT = [
+  { t:'tut.1', at:() => $('play'), on:'play' },
+  { t:'tut.2', at:() => cellEl(-1, 1), on:'cell:-1:1' },
+  { t:'tut.3', at:() => [...document.querySelectorAll('#pal .blk')].find(b => b.textContent === 'F'), on:'put' },
+  { t:'tut.4', at:() => cellEl(1, 0), on:'cell:1:0' },
+  { t:'tut.5', at:() => document.querySelector('#mel .st'), on:'mel' },
+  { t:'tut.6', at:() => document.querySelector('.hd .m'), on:'mute' },
+  { t:'tut.7', at:() => $('exportJs'), on:'next' },
+];
+let tutI = -1;
+function tutEnd(){ tutI = -1; try { localStorage.setItem('composer.tut', '1'); } catch(e){} tutShow(); }
+function tutStart(){ sel = { row:-1, bar:0 }; tutI = 0; render(); }   // 不動使用者的曲子
+function tutNote(n){ if(tutI >= 0 && TUT[tutI].on === n){ tutI++; if(tutI >= TUT.length) tutEnd(); else tutShow(); } }
+function tutShow(){
+  document.querySelectorAll('.tutHi').forEach(e => e.classList.remove('tutHi'));
+  let b = $('tut'); if(b) b.remove();
+  if(tutI < 0) return;
+  const step = TUT[tutI], el = step.at();
+  if(!el) return;
+  el.classList.add('tutHi');
+  b = document.createElement('div'); b.id = 'tut';
+  b.innerHTML = '<div>' + TEXT[step.t] + '</div><div class="tb"><button class="x">' + TEXT['tut.skip'] + '</button>' +
+    (step.on === 'next' ? '<button class="on n">' + TEXT['tut.done'] + '</button>' : '') + '</div>';
+  document.body.appendChild(b);
+  b.querySelector('.x').onclick = tutEnd;
+  if(step.on === 'next') b.querySelector('.n').onclick = tutEnd;
+  const r = el.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight;
+  let top = r.bottom + 14; if(top + bh > innerHeight - 8) top = Math.max(8, r.top - bh - 14);
+  b.style.top = top + 'px'; b.style.left = Math.max(8, Math.min(innerWidth - bw - 8, r.left)) + 'px';
+}
+$('tutBtn').onclick = tutStart;
+addEventListener('resize', tutShow);
+/* ── 電腦鍵盤當琴彈（v1.21.00，Master：「123456789 是白鍵，0 是休止符？qwer 那一排是黑鍵？」）──
+   數字＝簡譜音級（8、9＝高音 1、2），Q W R T Y I＝#1 #2 #4 #5 #6 #1̇（E、U 的位置本來就沒有黑鍵）；
+   0 休止、- 延長、Backspace 刪上一格、Z／X 降／升八度。
+   選中旋律軌的格子時「錄」：一鍵一格（八分音符）往右走；其他時候「試彈」只發聲。打字框裡不攔。 */
+const KB_WHITE = { 1:0, 2:2, 3:4, 4:5, 5:7, 6:9, 7:11, 8:12, 9:14 };
+const KB_BLACK = { q:1, w:3, r:6, t:8, y:10, i:13 };
+let kbOct = 4, kbCur = null;          // kbCur＝錄音游標 { row(軌), bar, step }
+function kbVoice(){ return sel.row >= 0 ? st.tracks[sel.row].voice : 'piano'; }
+function kbFlash(k){ const e = document.querySelector('#kb .kc[data-k="' + k + '"]'); if(e){ e.classList.add('hit'); setTimeout(() => e.classList.remove('hit'), 140); } }
+function kbPress(k){
+  k = k.toLowerCase();
+  if(k === 'z' || k === 'x'){ kbOct = Math.max(1, Math.min(7, kbOct + (k === 'x' ? 1 : -1))); kbFlash(k); kbDraw(); return true; }
+  const rec = mode() === 'melody', tr = rec ? st.tracks[sel.row] : null;
+  if(rec && (!kbCur || kbCur.row !== sel.row)) kbCur = { row:sel.row, bar:sel.bar, step:0 };
+  const write = val => {                 // 寫一格、游標前進（到小節尾換下一小節；不夠就加 4 小節）
+    const v = tr.blocks[kbCur.bar] || (tr.blocks[kbCur.bar] = Array(N).fill(null));
+    v[kbCur.step] = val; kbCur.step++;
+    if(kbCur.step >= N){ kbCur.step = 0;
+      if(kbCur.bar + 1 >= st.bars){ if(st.bars >= C.maxBars){ kbCur.step = N - 1; return; } resize(Math.min(C.maxBars, st.bars + 4)); }
+      kbCur.bar++; }
+    sel.bar = kbCur.bar; save(); render();
+  };
+  if(k in KB_WHITE || k in KB_BLACK){
+    const semi = k in KB_WHITE ? KB_WHITE[k] : KB_BLACK[k], midi = 12 * (kbOct + 1) + semi;
+    Musician.noteNow(midi, { voice:kbVoice(), cfg:CONFIG }); kbFlash(k);
+    if(rec){
+      if(k in KB_BLACK){ say(TEXT['kb.black']); return true; }
+      const deg = { 0:0, 2:1, 4:2, 5:3, 7:4, 9:5, 11:6, 12:7, 14:8 }[semi], row = (kbOct - tr.oct) * 7 + deg;
+      if(row < 0 || row >= C.melody.rows){ say(TEXT['kb.range']); return true; }
+      write(row);
+    }
+    return true;
+  }
+  if(!rec) return false;
+  if(k === '0'){ kbFlash(k); write(-1); return true; }
+  if(k === '-'){ kbFlash(k); write(null); return true; }
+  if(k === 'backspace'){
+    if(kbCur.step > 0) kbCur.step--; else if(kbCur.bar > 0){ kbCur.bar--; kbCur.step = N - 1; } else return true;
+    const v = tr.blocks[kbCur.bar]; if(v) v[kbCur.step] = null;
+    sel.bar = kbCur.bar; save(); render(); return true;
+  }
+  return false;
+}
+function kbDraw(){
+  const kb = $('kb'); if(!kb) return;
+  const rec = mode() === 'melody';
+  const cap = (k, lab, cls, col, row) => `<div class="kc ${cls || ''}" data-k="${k}" style="grid-column:${col} / span 2; grid-row:${row}"><b>${k.toUpperCase()}</b>${lab}</div>`;
+  let keys = '';
+  [1,2,3,4,5,6,7,8,9,0].forEach((d, i) => keys += cap(String(d), d === 0 ? '休止' : d === 8 ? '1̇' : d === 9 ? '2̇' : String(d), '', 1 + i * 2, 1));
+  [['q','#1'],['w','#2'],['e',''],['r','#4'],['t','#5'],['y','#6'],['u',''],['i','#1̇']].forEach(([k, l], i) =>
+    keys += cap(k, l, l ? 'bk' : 'off', 2 + i * 2, 2));   // 不用 .blk：那是調色盤積木的 class（min-height 72）
+  kb.innerHTML = '<div class="kbl">' + TEXT['kb.title'] + '<b>' + (rec ? TEXT['kb.rec'] : TEXT['kb.play']) + '</b>' + TEXT['kb.oct'](kbOct) + '</div>' +
+    '<div class="keys">' + keys + '</div>' +
+    '<div class="side">' + cap('z', '八度−', '', 'auto', 'auto') + cap('x', '八度+', '', 'auto', 'auto') + cap('-', '延長', '', 'auto', 'auto') + '</div>';
+  kb.querySelectorAll('.kc').forEach(e => e.onclick = () => kbPress(e.dataset.k));
+}
+document.addEventListener('keydown', e => {
+  if(e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  if(kbPress(e.key)) e.preventDefault();
+});
+
+/* ── 簡譜輸入（v1.20.00：原試聽台的簡譜即興台併進來）──
+   旋律軌：打簡譜→從選中的小節開始填進格子；放不進（十六分音符、升降、音域）就問要不要改成簡譜軌。 */
+const JP_PRESETS = [['π', '3.14159265358979323846264338327950288419716939937510'],
+                    ['e', '2.71828182845904523536028747135266249775724709369995'],
+                    ['φ', '1.61803398874989484820458683436563811772030917980576']];
+function jpBox(p, label, text, buttons){
+  const w = document.createElement('div'); w.className = 'jpbox';
+  w.innerHTML = '<div class="grp">' + label + '</div><textarea spellcheck="false"></textarea><div class="jpbtns"></div>';
+  const ta = w.querySelector('textarea'); ta.value = text || '';
+  buttons.forEach(([t, fn, cls]) => { const b = document.createElement('button'); b.textContent = t; if(cls) b.className = cls;
+    b.onclick = () => fn(ta); w.querySelector('.jpbtns').appendChild(b); });
+  p.appendChild(w); return ta;
+}
+function jpInput(p, tr){
+  jpBox(p, TEXT['cp.jpIn'], '', [
+    ...JP_PRESETS.map(([k, v]) => [k, ta => { ta.value = v; }]),
+    [TEXT['cp.jpFill'], ta => fillFromJianpu(tr, ta.value), 'on'],
+  ]);
+}
+function jpPanel(p, tr){
+  const g = document.createElement('div'); g.className = 'grp'; g.textContent = TEXT['cp.jpTrack']; p.appendChild(g);
+  jpBox(p, '', tr.jp, [
+    [TEXT['cp.jpUpdate'], ta => { tr.jp = ta.value; tr.notes = Musician.fromJianpu(ta.value).notes; save(); render(); replay(); }, 'on'],
+    [TEXT['cp.jpBack'], ta => { const r = Composer.fitMelody(Musician.fromJianpu(ta.value).notes, C);
+        if(r.err) return say(r.err + '，還是放不進格子');
+        tr.kind = 'melody'; tr.oct = r.oct; delete tr.notes; delete tr.jp;
+        if(r.bars.length > st.bars) resize(Math.min(C.maxBars, Math.ceil(r.bars.length / 4) * 4));
+        tr.blocks = Array.from({ length:st.bars }, (_, i) => r.bars[i] || null); save(); render(); replay(); }],
+  ]);
+}
+function fillFromJianpu(tr, text){
+  const notes = Musician.fromJianpu(text).notes;
+  const r = Composer.fitMelody(notes, C, tr.oct);
+  if(r.err){
+    if(confirm(TEXT['cp.jpAsk'](r.err, tr.name))){ tr.kind = 'jp'; tr.jp = text; tr.notes = notes; save(); render(); replay(); }
+    return;
+  }
+  const need = sel.bar + r.bars.length;
+  if(need > st.bars) resize(Math.min(C.maxBars, Math.ceil(need / 4) * 4));
+  r.bars.forEach((v, i) => { if(sel.bar + i < st.bars) tr.blocks[sel.bar + i] = v; });
+  if(need > C.maxBars) say('超過 ' + C.maxBars + ' 小節的部分沒放進去');
+  save(); render(); if(playing) replay(); else Musician.play(Composer.expand({ ...st, tracks:[{ ...tr, mute:false, solo:false }] }, C), { cfg:CONFIG });
+}
+/* 從試聽台「在創作台打開」帶過來的多聲部作品：放得進格子的軌變旋律軌，放不進的變簡譜軌 */
+function importTune(t){
+  const tracks = t.parts.map(p => {
+    let n = Composer.transpose(p.notes || Musician.fromJianpu(p.jp || '').notes, p.shift || 0), all = [];
+    for(let k = 0; k < (p.rep || 1); k++) all = all.concat(n);
+    if(p.offset) all = [[null, p.offset]].concat(all);
+    const base = { name:p.name, voice:p.voice, vol:p.vol == null ? 0.8 : p.vol, pan:p.pan || 0, mute:false, solo:false };
+    const r = Composer.fitMelody(all, C);
+    return r.err ? { ...base, kind:'jp', oct:4, jp:p.jp || '', notes:all, blocks:[] } : { ...base, kind:'melody', oct:r.oct, blocks:r.bars };
+  });
+  const bars = Math.min(C.maxBars, Math.max(4, Math.ceil(Math.max(...tracks.map(x => x.blocks.length)) / 4) * 4));
+  tracks.forEach(x => x.blocks = Array.from({ length:bars }, (_, i) => x.blocks[i] || null));
+  return { name:t.name, bpm:t.bpm || C.bpm, bars, chords:Array(bars).fill(null), tracks };
+}
+if(/[?&]import=1/.test(location.search)){
+  try { const t = JSON.parse(localStorage.getItem('composer.import'));
+    if(t && t.parts){ st = importTune(t); sel = { row:0, bar:0 }; save(); localStorage.removeItem('composer.import'); }
+  } catch(e){ console.warn('[composer] 匯入失敗', e); }
+  history.replaceState(null, '', 'composer.html');
+}
+
+render();
+try { if(!localStorage.getItem('composer.tut')) tutStart(); } catch(e){}
+</script>
+</body>
+</html>

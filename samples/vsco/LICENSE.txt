@@ -1,0 +1,8 @@
+These samples are derived from VS Chamber Orchestra: Community Edition (VSCO 2 CE)
+by Versilian Studios (recorded by Sam Gossner & Simon Dalzell).
+License: CC0 1.0 Universal (public domain dedication).
+Source: https://versilian-studios.com/vsco-community/ ("50 Orchestral Samples" pack)
+        https://github.com/sgossner/VSCO-2-CE (LICENSE: CC0 1.0 Universal)
+Changes: trimmed to 1-10 s with 0.4 s fade-out, mixed to mono, 44.1 kHz, MP3 96 kbps.
+File names give the measured MIDI pitch (e.g. vln-69 = A4), measured by autocorrelation,
+because the original file names use inconsistent octave numbering.

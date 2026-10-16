@@ -48,3 +48,8 @@ strings.zh.js  介面文字
 
 版權所有，保留一切權利。詳見 [LICENSE](LICENSE)。
 歡迎遊玩與回報意見；未經授權請勿散布、修改或商業使用。
+
+
+## 致謝
+
+- 真樂器取樣：[VS Chamber Orchestra: Community Edition](https://versilian-studios.com/vsco-community/)（Versilian Studios，錄音 Sam Gossner & Simon Dalzell，CC0 1.0）。轉檔說明見 `samples/vsco/LICENSE.txt`。

@@ -675,7 +675,35 @@ function initDesignerPanel(CONFIG, opts = {}) {
     'width:40px;height:40px;line-height:40px;text-align:center;font-size:20px;border-radius:50%;' +
     'background:' + TH.bg + ';color:' + TH.accent + ';border:1px solid ' + TH.line + ';' +
     'user-select:none;-webkit-tap-highlight-color:transparent;';
-  handle.addEventListener('click', () => toggle());
+  /* v12（Roy 2026-10-11：「很多右下角的齒輪會擋住原有遊戲內容…還是讓齒輪隨意浮動？」）：
+     每款遊戲的空角落不同，固定任何一角都會在某款蓋到東西。改成拖得動、放哪記哪（每個網址各記一份）；
+     點一下照舊開面板，拖超過 5px 才算拖。用 !important 寫位置，蓋過各專案 CSS 把它釘在角落的規則。 */
+  handle.style.touchAction = 'none';
+  const posKey = 'dp-handle-pos:' + location.pathname;
+  const place = (x, y) => {
+    x = Math.max(0, Math.min(innerWidth - 40, x)); y = Math.max(0, Math.min(innerHeight - 40, y));
+    for (const [k, v] of [['left', x + 'px'], ['top', y + 'px'], ['right', 'auto'], ['bottom', 'auto']]) handle.style.setProperty(k, v, 'important');
+    return [x, y];
+  };
+  try { const p = JSON.parse(localStorage.getItem(posKey)); if (p) place(p[0], p[1]); } catch (e) {}
+  let drag = null;
+  handle.addEventListener('pointerdown', (e) => {
+    const r = handle.getBoundingClientRect();
+    drag = { sx: e.clientX, sy: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false };
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5) return;
+    drag.moved = true; drag.pos = place(e.clientX - drag.dx, e.clientY - drag.dy);
+  });
+  handle.addEventListener('pointerup', () => {
+    if (!drag) return;
+    if (drag.moved) { try { localStorage.setItem(posKey, JSON.stringify(drag.pos)); } catch (e) {} }
+    else toggle();
+    drag = null;
+  });
+  handle.addEventListener('pointercancel', () => { drag = null; });
   document.body.appendChild(handle);
 
   function toggle(force) {
