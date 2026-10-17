@@ -249,10 +249,8 @@ mixBtn.onclick=()=>{
 };
 document.querySelector('.now').prepend(mixBtn);   // 指揮開關跟播放模式放同一列（它是「怎麼播」不是「哪種音色」）
 function paintVoices(){
-  voicesEl.querySelectorAll('button').forEach(x=>{
-    if(x.id==='mixToggle') x.classList.toggle('mixOn',mixMode);
-    else x.classList.toggle('active',activeVoices.has(x.dataset.v));
-  });
+  voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',activeVoices.has(x.dataset.v)));
+  mixBtn.classList.toggle('mixOn',mixMode);   // 指揮鈕已搬到播放列，不在 voicesEl 裡（2026-10-17 Master 抓到「指揮按鍵不亮」）
 }
 paintVoices();
 
@@ -508,8 +506,11 @@ initDesignerPanel(CONFIG,{
     });
   };
   sel.onchange=draw; draw();
-  document.getElementById('orchPlay').onclick=()=>Musician.play(cur(),{cfg:CONFIG});
-  document.getElementById('orchStop').onclick=()=>Musician.stop();
+  // 播多聲部時，播放列也要說實話：曲庫卡熄掉、顯示這首的名字、停止鈕出現（2026-10-17 全面按鍵調查）
+  document.getElementById('orchPlay').onclick=()=>{ mark(-1); clearScore();
+    Musician.play(cur(),{cfg:CONFIG,onend:()=>{ nowEl.textContent=''; stopBtn.style.display='none'; }});
+    nowEl.textContent=TEXT['ui.playing'](cur().name); stopBtn.style.display=''; };
+  document.getElementById('orchStop').onclick=()=>{ Musician.stop(); mark(-1); };
   // 拆開來改：把這首交給積木編輯器（localStorage 傳遞），在那邊能放進格子的軌變格子，放不進的保留簡譜軌
   document.getElementById('orchEdit').onclick=()=>{
     try{ localStorage.setItem('composer.import', JSON.stringify(cur())); }catch(e){}

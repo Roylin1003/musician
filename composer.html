@@ -358,7 +358,15 @@ const KB_WHITE = { 1:0, 2:2, 3:4, 4:5, 5:7, 6:9, 7:11, 8:12, 9:14 };
 const KB_BLACK = { q:1, w:3, r:6, t:8, y:10, i:13 };
 let kbOct = 4, kbCur = null;          // kbCur＝錄音游標 { row(軌), bar, step }
 function kbVoice(){ return sel.row >= 0 ? st.tracks[sel.row].voice : 'piano'; }
-function kbFlash(k){ const e = document.querySelector('#kb .kc[data-k="' + k + '"]'); if(e){ e.classList.add('hit'); setTimeout(() => e.classList.remove('hit'), 140); } }
+/* 錄音時每按一鍵就 render()（鍵帽會重畫），所以「亮」記在變數裡、重畫完再補上——
+   之前直接加 class，錄音模式下鍵帽一亮就被重畫洗掉（2026-10-17 全面按鍵調查抓到） */
+let kbHit = null;
+function kbFlash(k){ kbHit = { k, t:performance.now() }; kbPaintHit(); }
+function kbPaintHit(){
+  if(!kbHit || performance.now() - kbHit.t > 140) return;
+  const e = document.querySelector('#kb .kc[data-k="' + kbHit.k + '"]'); if(!e) return;
+  e.classList.add('hit'); setTimeout(() => e.classList.remove('hit'), 140 - (performance.now() - kbHit.t));
+}
 function kbPress(k){
   k = k.toLowerCase();
   if(k === 'z' || k === 'x'){ kbOct = Math.max(1, Math.min(7, kbOct + (k === 'x' ? 1 : -1))); kbFlash(k); kbDraw(); return true; }
@@ -405,6 +413,7 @@ function kbDraw(){
     '<div class="keys">' + keys + '</div>' +
     '<div class="side">' + cap('z', '八度−', '', 'auto', 'auto') + cap('x', '八度+', '', 'auto', 'auto') + cap('-', '延長', '', 'auto', 'auto') + '</div>';
   kb.querySelectorAll('.kc').forEach(e => e.onclick = () => kbPress(e.dataset.k));
+  kbPaintHit();
 }
 document.addEventListener('keydown', e => {
   if(e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
