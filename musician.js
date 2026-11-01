@@ -163,7 +163,7 @@ const Musician = (() => {
       });
     },
     /* ── 多聲部用的四個新音色（v1.15.00，Master 的史詩配樂）──
-       素材庫 D:\game_art 沒有可演奏的管弦取樣（只有音效與成品配樂），所以這四個一樣是合成。
+       素材庫沒有可演奏的管弦取樣（只有音效與成品配樂），所以這四個一樣是合成。
        銅管：鋸齒波＋低通濾波「漸開」（嘴唇起振，亮度隨氣息打開）——銅管的靈魂是亮度包絡不是音量 */
     brass(hz,t,dur,out,P){
       const f=actx.createBiquadFilter(); f.type='lowpass'; f.connect(out);
@@ -277,7 +277,7 @@ const Musician = (() => {
   }
 
   /* ── 真樂器取樣（v1.19.00，Master：「真實樂器的音色取樣……可以重新搜尋嗎」）──
-     素材庫 D:\game_art 沒有可演奏的樂器單音；改用 VSCO 2 Community Edition（Versilian Studios，CC0）
+     素材庫沒有可演奏的樂器單音；改用 VSCO 2 Community Edition（Versilian Studios，CC0）
      50 取樣精簡包，轉成 samples/vsco/*.mp3（檔名＝實測 MIDI 音高）。
      setSamples(CONFIG.samples, 'samples/vsco/') 把每組取樣註冊成一個音色：挑最近的取樣、playbackRate 移調。
      perc:true＝打擊組（音級挑樂器：1 定音鼓低 2 定音鼓 3 小鼓 4 小鼓滾奏 5 銅鈸 6 鑼 7 吊鈸漸強，原速不移調）；
@@ -436,7 +436,10 @@ const Musician = (() => {
        停在 suspended，那時排程照走但一點聲音也沒有。resume 是每次播放的保險。 */
     if(actx.state==='suspended') actx.resume().catch(()=>{});
     const cfg   = opts.cfg || FALLBACK;
-    const used=(Array.isArray(tune.parts)?tune.parts.map(p=>p.voice):[].concat(opts.voice||'crystal'))
+    /* 伴奏軌（v1.23.00，Master：「好像需要多聲部耶」→ 曲庫全面升級）：tune.accomp＝[{name,voice,vol,notes}]，
+       旋律照舊跟著玩家選的音色走、伴奏固定樂器；有伴奏就不配自動和聲襯底（那只會 C／F／G）。opts.accomp:false＝關伴奏 */
+    const useAcc=Array.isArray(tune.accomp)&&opts.accomp!==false;
+    const used=(Array.isArray(tune.parts)?tune.parts.map(p=>p.voice):[].concat(opts.voice||'crystal').concat(useAcc?tune.accomp.map(a=>a.voice):[]))
       .filter(v=>sampleBank[v]&&!sampleBank[v].ready);
     if(used.length){                      // 取樣還沒到：先下載，到了再自動開播（中途 stop() 或換曲就作廢）
       const tok=++pendingTok; pending=true;
@@ -486,7 +489,7 @@ const Musician = (() => {
        把「接下來 5 秒」排進 WebAudio。全曲一次排的舊做法在小夜曲全樂章（2600 事件）
        實測凍 622ms——長樂章進庫後這不再是理論問題。發聲時間仍是絕對時間軸，取樣級準確 */
     const events=[];   // {at:相對 t0 的秒數, run:排程呼叫}
-    if(cfg.play.chords && tune.chords!==false && Array.isArray(tune.chords)){
+    if(!useAcc && cfg.play.chords && tune.chords!==false && Array.isArray(tune.chords)){
       let ct=0, cb=0;
       for(const c of tune.chords){
         if(cb>=cap)break;
@@ -495,7 +498,7 @@ const Musician = (() => {
         ct+=dur; cb+=c[1];
       }
     }
-    const autoChord = cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
+    const autoChord = !useAcc && cfg.play.chords && tune.chords!==false && !Array.isArray(tune.chords);
     const BAR = tune.chordBars || cfg.play.chordBars;
 
     let t=0, played=0, barT=0, barNames=[], barLen=0, lastDur=0;
@@ -520,6 +523,17 @@ const Musician = (() => {
       if(barLen>=BAR)flushBar();
     }
     flushBar();
+    if(useAcc) tune.accomp.forEach(a=>{          // 伴奏：每軌自己一條音量閘，固定樂器
+      const v=VOICES[a.voice]?a.voice:'piano', P=(cfg.voices&&cfg.voices[v])||FALLBACK.voices[v];
+      const g=actx.createGain(); g.gain.value=a.vol==null?0.7:a.vol; g.connect(master);
+      let at=0, pl=0;
+      for(const n of a.notes){
+        if(pl>=cap)break;
+        const dur=n[1]*beat;
+        if(n[0]){ const t1=at, hz=hzOfMidi(midiOf(n[0]))*ratio; events.push({at:t1, run:()=>VOICES[v](hz,t0+t1,dur,g,P)}); }
+        at+=dur; pl+=n[1];
+      }
+    });
     events.sort((a,b)=>a.at-b.at);   // 和聲事件與旋律事件交錯，排一次
 
     const HORIZON=10;  // 秒；look-ahead 窗（拉到 10 秒：背景分頁的 setTimeout 會被節流，多一倍緩衝）

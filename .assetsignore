@@ -3,3 +3,6 @@
 .git/**
 README.md
 LICENSE
+
+docgen.js
+midi2tune.py

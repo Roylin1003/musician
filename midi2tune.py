@@ -73,11 +73,24 @@ def main():
     notes = [(s, dur, p) for tr in trs for s, dur, p in tracks[tr][1] if a <= s < b]
     notes.sort()
     Q = div // 4                                   # 十六分音符格
-    # 同格多音取最高音
+    # 同格多音取最高音（旋律線）；--lowest 1 改取最低音（低音線，v1.23.00 伴奏軌用）
+    low = args.get('--lowest') == '1'
     grid = {}
     for s, dur, p in notes:
         k = round(s / Q)
-        if k not in grid or p > grid[k][0]: grid[k] = (p, max(1, round(dur / Q)))
+        if k not in grid or (p < grid[k][0] if low else p > grid[k][0]): grid[k] = (p, max(1, round(dur / Q)))
+    if low:
+        # 低音線：某格最低的新音若高於「還在響的更低音」（吉他／鋼琴左手的長低音下，上聲部動了）＝不是低音，跳過；
+        # 留下的每個音最長只到下一個留下的音（不然長低音會把時間軸往後推，跟旋律對不齊）
+        sounding = []                              # (結束格, 音高)
+        keep = {}
+        for k in sorted(grid):
+            p, d16 = grid[k]
+            sounding = [(e, q) for e, q in sounding if e > k]
+            if any(q < p for e, q in sounding): continue
+            keep[k] = (p, d16); sounding.append((k + d16, p))
+        ks = sorted(keep)
+        grid = {k: (keep[k][0], min(keep[k][1], ks[i+1] - k) if i + 1 < len(ks) else keep[k][1]) for i, k in enumerate(ks)}
     out = []; cur = None
     for k in sorted(grid):
         p, d16 = grid[k]
