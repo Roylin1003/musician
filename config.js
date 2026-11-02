@@ -55,6 +55,13 @@ const CONFIG = {
        三味線 sawari＝琴頸嗡嗡震的失真量、bachi＝撥子擊皮聲；古箏 vib*＝揉弦（vibDelay 秒後開始） */
     shamisen: { gain: 0.55, decay: 1.0, bright: 0.85, sawari: 3, bachi: 0.25 },
     guzheng:  { gain: 0.55, decay: 2.6, bright: 0.45, vibDelay: 0.25, vibRate: 5.5, vibDepth: 18 },
+    /* 函數音色（v1.24.00）：公式就是音色，旋鈕就是公式的係數。
+       fm＝sin(2πft + I(t)·sin(2π·ratio·ft))，I 由 iStart 衰減到 iEnd（tau 秒）：起音咬、之後乾淨
+       folder＝波形折疊 1−4|frac((g·sinφ+1)/4)−½|，g 由 gStart 降到 gEnd（最大 8）
+       monster＝魏爾斯特拉斯 Σ aⁿcos(ratioⁿπx)：layers 層、頻率每層 ×ratio、振幅每層 ×amp */
+    fm:      { gain: 0.22, attack: 0.004, release: 0.08, ratio: 2, iStart: 5, iEnd: 0.6, tau: 0.12, padScale: 0.5 },
+    folder:  { gain: 0.22, attack: 0.004, release: 0.08, gStart: 6, gEnd: 1.2, tau: 0.15, padScale: 0.5 },
+    monster: { gain: 0.12, attack: 0.006, release: 0.10, layers: 4, ratio: 3, amp: 0.55, padScale: 0.5 },
     /* 真樂器取樣（v1.19.00）：只有音量與收音秒兩顆旋鈕；檔案對照在下面的 SAMPLES */
     r_vln:   { gain: 0.9, release: 0.25 }, r_cello: { gain: 0.9, release: 0.3 },
     r_trem:  { gain: 0.8, release: 0.25 }, r_tbn:   { gain: 0.8, release: 0.2 },

@@ -134,22 +134,54 @@
   .orch.panel{margin-top:0; border-top:none; padding-top:0;}
   .top{display:flex; flex-direction:column; align-items:center;}
   .app,.left,.right{display:contents;}  /* 窄螢幕：照舊一條直欄往下排 */
-  /* 桌機（≥1100px）：左欄選樂器、右欄聽與選曲，整頁一屏不捲動；放不下的只在面板內部捲 */
+  .sub{display:none;}   /* 副標是自我介紹，曲庫本身就說明了——剃掉 */
+  /* 桌機（≥1100px）：三欄一屏不捲動——左＝曲庫、中＝舞台（簡譜捲簾吃滿）、右＝音色；放不下的只在欄內部捲 */
   @media (min-width:1100px){
     :root{ --colW:100%; }
-    body{height:100vh; overflow:hidden; padding:16px 24px 28px; align-items:stretch;}
-    .top{flex-direction:row; align-items:baseline; justify-content:center; gap:20px; margin-bottom:14px; flex:none;}
-    .top .sub,.top a{margin:0 !important;}
-    .app{display:grid; grid-template-columns:minmax(360px,30%) 1fr; gap:28px; flex:1; min-height:0; width:100%; max-width:2400px; margin:0 auto;}
-    .left{display:flex; flex-direction:column; gap:8px; overflow:auto; min-height:0;}
-    .left .voices{grid-template-columns:repeat(3,1fr); margin:0;}
-    .left .hint{margin:4px 0;}
-    .left .now{flex-wrap:wrap; height:auto; gap:10px; margin:0;}
-    .right{display:flex; flex-direction:column; min-height:0;}
-    .right .score{margin-bottom:6px;}
-    .right .panel{flex:1; min-height:0; overflow:auto;}
-    .tunes{align-content:start;}
+    body{height:100vh; overflow:hidden; padding:14px 28px 28px; align-items:stretch;}
+    .top{justify-content:center; margin-bottom:12px; flex:none;}
+    .top a{margin:0 !important;}
+    .app{display:grid; grid-template-columns:minmax(380px,27%) 1fr minmax(300px,22%); grid-template-rows:auto minmax(0,1fr) auto;
+         gap:14px 28px; flex:1; min-height:0; width:100%; max-width:2400px; margin:0 auto;}
+    .left,.right{display:contents;}
+    .tabs{grid-area:1/1; margin:0; width:100%;}
+    .panel{grid-area:2/1/4/2; min-height:0; overflow:auto; padding-right:6px;}
+    .tunes{grid-template-columns:1fr; align-content:start; gap:10px;}
+    .score{grid-area:1/2/3/3; display:flex; flex-direction:column; min-height:0; margin:0;}
+    #roll{flex:1; height:auto; min-height:0; border-radius:16px;}
+    .scoreStrip{flex:1; height:auto; border-radius:16px; display:flex; align-items:center;}
+    .now{grid-area:3/2; margin:0; flex-wrap:wrap; height:auto; gap:10px;}
+    .voices{grid-area:1/3/3/4; grid-template-columns:repeat(2,1fr); align-content:start; overflow:auto; margin:0; min-height:0;}
+    .left>.hint{grid-area:3/3; margin:0;}
+    body.tab-orch .panel{grid-area:2/1/4/3;}
+    body.tab-orch .score{grid-area:1/3/3/4;}
+    body.tab-orch .now{grid-area:3/3;} body.tab-orch .scoreHead .hint{display:none;}
     .credits{position:fixed; right:16px; bottom:6px; margin:0;}
+  }
+  @media (min-width:1800px) and (min-height:1200px){
+    .tunes{grid-template-columns:repeat(2,1fr);}
+    .app{grid-template-columns:minmax(560px,30%) 1fr minmax(420px,20%);}
+    .tabs button,.tabLink{font-size:18px; padding:10px 22px;}
+    .now button{min-height:44px;}
+  }
+  /* 手機：舞台在最上、音色單排橫滑、曲庫在內部捲——第一眼就是「點一首曲子」 */
+  @media (max-width:1099px){
+    body{height:100dvh; min-height:0; overflow:hidden; padding:10px 12px 0; align-items:stretch;}
+    .top{flex:none; margin-bottom:6px;} h1{font-size:20px;}
+    .score{order:1; flex:none; margin-bottom:6px;}
+    #roll{height:112px;}
+    .scoreStrip{height:112px;}
+    .now{order:2; flex:none; height:auto; margin-bottom:6px; gap:8px; overflow-x:auto; white-space:nowrap; scrollbar-width:none;}
+    .now button{white-space:nowrap; flex:none; min-height:44px;}
+    .voices{order:3; flex:none; display:flex; width:100%; overflow-x:auto; gap:6px; margin-bottom:8px; scrollbar-width:none;}
+    .voices button{flex:none; padding:0 14px; min-height:44px;}
+    .vsep,.left>.hint,.scoreHead .hint{display:none;}
+    .tabs{order:4; width:100%; flex:none; margin:0 0 8px;}
+    .tabs button,.tabLink{min-height:44px; padding:0 16px;}
+    .panel{order:5; flex:1; min-height:0; overflow:auto; width:100%; padding-bottom:12px;}
+    .tunes{grid-template-columns:1fr; gap:8px;}
+    .tune{padding:10px 14px;} .tune .orig{display:none;}
+    .credits{order:9; position:static; margin:2px 0; font-size:10px; flex:none; text-align:center;}
   }
 </style>
 </head>
@@ -183,7 +215,7 @@
   </section>
 
   <nav class="tabs">
-    <button data-p="tunes" data-t="tab.tunes"></button><button data-p="orch" data-t="orch.title"></button><a class="tabLink" href="composer.html" data-t="tab.create"></a>
+    <button data-p="tunes" data-t="tab.tunes"></button><button data-p="orch" data-t="orch.title"></button><a class="tabLink" href="composer.html" data-t="tab.create"></a><a class="tabLink" href="formula.html" data-t="tab.formula"></a>
   </nav>
   <div class="tunes panel" data-p="tunes" id="tunes"></div>
 
@@ -207,10 +239,10 @@
 
   <footer class="credits"><a href="https://versilian-studios.com/vsco-community/" target="_blank" rel="noopener" data-t="credits.samples"></a></footer>
 
-<script src="config.js?v=1.21.00"></script>
-<script src="strings.zh.js?v=1.21.00"></script>
-<script src="musician.js?v=1.21.00"></script>
-<script src="designer-panel.js?v=1.21.00"></script>
+<script src="config.js?v=1.24.01"></script>
+<script src="strings.zh.js?v=1.24.01"></script>
+<script src="musician.js?v=1.24.01"></script>
+<script src="designer-panel.js?v=1.24.01"></script>
 <script>
 applyText(CONFIG); applyStaticText();
 const JIANPU_IDX=-2;   // 簡譜即興台的虛擬曲目索引（不在 TUNES 裡）
@@ -280,7 +312,8 @@ TUNES.map((tu,i)=>({tu,i}))
   b.innerHTML='<span class="name">'+tu.name+'</span>'+
               (tu.orig?'<span class="orig">'+tu.orig+'</span>':'')+
               '<span class="meta">'+tu.composer+'　'+TEXT['ui.beats'](beats)+(tu.accomp?'　'+TEXT['ui.hasAcc']:'')+'</span>';
-  b.onclick=()=>playTune(i);
+  b.setAttribute('role','button'); b.tabIndex=0; b.onclick=()=>playTune(i);
+  b.onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===b){ e.preventDefault(); playTune(i); } };
   const kids=TUNES.map((t2,j)=>({t2,j})).filter(x=>x.t2.parent===tu.id);
   if(kids.length){
     const row=document.createElement('div'); row.className='chips';
@@ -349,10 +382,10 @@ scoreModeBtn.onclick=()=>{ rollMode=!rollMode; applyMode(); if(!scoreRAF&&scoreT
 function drawRoll(pos){
   if(!rollMode) return;
   const dpr=window.devicePixelRatio||1, W=rollEl.clientWidth, H=rollEl.clientHeight;
-  if(rollEl.width!==Math.round(W*dpr)){ rollEl.width=Math.round(W*dpr); rollEl.height=Math.round(H*dpr); }
+  if(rollEl.width!==Math.round(W*dpr)||rollEl.height!==Math.round(H*dpr)){ rollEl.width=Math.round(W*dpr); rollEl.height=Math.round(H*dpr); }
   rctx.setTransform(dpr,0,0,dpr,0,0); rctx.clearRect(0,0,W,H);
   const toks=scoreTokens;
-  if(!toks.length){ rctx.fillStyle='#8a8fa8'; rctx.font='15px "Noto Sans TC",sans-serif'; rctx.textAlign='center';
+  if(!toks.length){ rctx.fillStyle='#8a8fa8'; rctx.font=Math.max(15,Math.round(H/28))+'px "Noto Sans TC",sans-serif'; rctx.textAlign='center';
     rctx.fillText(TEXT['score.empty'],W/2,H/2+5); rctx.textAlign='left'; return; }
   let lo=1e9, hi=-1e9; for(const t of toks) if(t.midi!=null){ if(t.midi<lo)lo=t.midi; if(t.midi>hi)hi=t.midi; }
   if(lo>hi) return;
@@ -470,7 +503,7 @@ initDesignerPanel(CONFIG,{
   gate:false, title:'混音師面板',
   labels:{
     play:'播放', volume:'總音量', bpm:'預設速度', chords:'和聲襯底', chordBars:'幾拍換和弦', transpose:'移調半音', floorMidi:'低音折疊(MIDI)',
-    voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴', strings:'弦樂', flute:'長笛', brass:'銅管', choir:'合唱', timpani:'定音鼓', harp:'豎琴', shamisen:'三味線', guzheng:'古箏', r_vln:'真·小提琴', r_cello:'真·大提琴', r_trem:'真·弦樂顫音', r_tbn:'真·長號', r_tuba:'真·低音號', r_tpt:'真·小號', r_flute:'真·長笛', r_oboe:'真·雙簧管', r_bsn:'真·低音管', r_harp:'真·豎琴', r_mar:'真·馬林巴', r_glock:'真·鐵琴', r_perc:'真·打擊組', sawari:'嗡嗡震', bachi:'撥子聲', vibDelay:'揉弦延遲秒',
+    voices:'音色', chip:'8-bit', crystal:'水晶', piano:'鋼琴', strings:'弦樂', flute:'長笛', brass:'銅管', choir:'合唱', timpani:'定音鼓', harp:'豎琴', shamisen:'三味線', guzheng:'古箏', fm:'FM 咬音', folder:'折疊音', monster:'怪物音', ratio:'調變倍率', iStart:'起音調變量 I', iEnd:'收音調變量 I', tau:'衰減時間 τ', gStart:'起音增益 g', gEnd:'收音增益 g', layers:'疊加層數 n', amp:'每層振幅比 a', r_vln:'真·小提琴', r_cello:'真·大提琴', r_trem:'真·弦樂顫音', r_tbn:'真·長號', r_tuba:'真·低音號', r_tpt:'真·小號', r_flute:'真·長笛', r_oboe:'真·雙簧管', r_bsn:'真·低音管', r_harp:'真·豎琴', r_mar:'真·馬林巴', r_glock:'真·鐵琴', r_perc:'真·打擊組', sawari:'嗡嗡震', bachi:'撥子聲', vibDelay:'揉弦延遲秒',
     bright:'亮度倍數', vowel1:'母音共振峰1', vowel2:'母音共振峰2', drop:'起擊音高倍數', dropTime:'滑音秒', decay:'餘響秒', thump:'槌擊噪音',
     release:'收音秒', detune:'失諧音分', brightness:'亮度倍數', woody:'木頭味',
     vibRate:'顫音頻率', vibDepth:'顫音深度', rootOct:'根音八度',

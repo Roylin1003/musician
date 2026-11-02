@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>公式作曲台 · Royal Musician</title>
+<style>
+  :root{ --bg:#0e1122; --panel:#171b33; --line:#2a2f52; --text:#e8e4d8; --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8; --bad:#e08a8a; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font:18px/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif; padding:16px; display:flex; flex-direction:column; align-items:center; gap:14px; min-height:100vh;}
+  button,select,input{font:inherit; color:inherit;}
+  button,select{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 16px; cursor:pointer; min-height:44px;}
+  button:hover{border-color:var(--blue);}
+  header{width:min(1100px,100%); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;}
+  h1{font-size:28px; color:var(--gold); letter-spacing:2px;}
+  header a{color:var(--muted); font-size:16px; text-decoration:none;}
+  main{width:min(1100px,100%); display:grid; grid-template-columns:1fr; gap:14px;}
+  @media(min-width:1000px){ main{grid-template-columns:minmax(420px,5fr) 6fr;} }
+  .box{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;}
+  label.f{color:var(--muted); font-size:16px; display:flex; flex-direction:column; gap:4px;}
+  input[type=text]{width:100%; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-family:Consolas,"Courier New",monospace; font-size:20px; color:var(--gold);}
+  input[type=text].bad{border-color:var(--bad);}
+  input[type=number]{width:84px; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold);}
+  .row{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;}
+  .chips{display:flex; flex-wrap:wrap; gap:8px;}
+  .chips button{font-size:16px; padding:6px 12px; min-height:44px;}
+  #err{color:var(--bad); min-height:1.5em; font-size:16px;}
+  #go{border-color:var(--gold); color:var(--gold); padding:8px 32px;}
+  #plot{width:100%; height:clamp(220px,38vh,460px); background:#10142a; border:1px solid var(--line); border-radius:12px; display:block;}
+  #names{color:var(--muted); font-size:16px; word-break:break-all;}
+</style>
+</head>
+<body>
+<header><h1>公式作曲台</h1><a href="index.html">← 音樂家</a><a href="composer.html">創作台</a></header>
+<main>
+  <section class="box">
+    <label class="f">音高：n 是第幾顆音 → 算出音級（0＝主音）
+      <input type="text" id="fp" spellcheck="false" autocomplete="off" value="floor(7*frac(n*phi))">
+    </label>
+    <label class="f">時值（拍）：可留白＝每顆一拍
+      <input type="text" id="fr" spellcheck="false" autocomplete="off" placeholder="1">
+    </label>
+    <div class="row">
+      <label class="f">音數<input type="number" id="cnt" min="1" max="512" value="32"></label>
+      <label class="f">速度<input type="number" id="bpm" min="40" max="240" value="120"></label>
+      <label class="f">音階<select id="sc"><option value="major">大調</option><option value="minor">小調</option><option value="pentatonic">五聲</option><option value="chromatic">半音階</option></select></label>
+      <label class="f">範圍（八度）<input type="number" id="span" min="1" max="4" value="2"></label>
+    </div>
+    <label class="f">音色<select id="vo"></select></label>
+    <div id="err"></div>
+    <div class="row"><button id="go">▶ 演奏</button><button id="stop">■ 停止</button><button id="copy">複製連結</button></div>
+    <div class="chips" id="presets"></div>
+  </section>
+  <section class="box">
+    <canvas id="plot"></canvas>
+    <div id="names"></div>
+  </section>
+</main>
+
+<script src="config.js?v=1.24.01"></script>
+<script src="strings.zh.js?v=1.24.01"></script>
+<script src="musician.js?v=1.24.01"></script>
+<script>
+const $=id=>document.getElementById(id);
+const PRESETS=[
+  ['黃金比', 'floor(7*frac(n*phi))', ''],
+  ['正弦起伏', '7+7*sin(n/3)', ''],
+  ['平方餘數', 'mod(n*n,9)', ''],
+  ['圓周率', 'floor(10*frac(pi*n))', ''],
+  ['怪物（魏爾斯特拉斯）', '7+4*sum(k,0,3,cos(3^k*n)/2^k)', ''],
+  ['爬升加速', 'floor(n*n/6)', '2-n/16'],
+  ['三連音節奏', 'floor(5*frac(n*phi))', '1+mod(n,3)/2'],
+];
+const FN_VOICES=Musician.voices.filter(v=>!Musician.isSampled(v));
+$('vo').innerHTML=FN_VOICES.map(v=>'<option value="'+v+'">'+(TEXT['ui.voice.'+v]||v)+'</option>').join('');
+$('vo').value='fm';
+$('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
+$('presets').onclick=e=>{ const b=e.target.closest('button'); if(!b)return; const p=PRESETS[b.dataset.i]; $('fp').value=p[1]; $('fr').value=p[2]; build(true); };
+
+let tune=null;
+function build(play){
+  $('err').textContent=''; $('fp').classList.remove('bad'); $('fr').classList.remove('bad');
+  try{
+    tune=Musician.fromFormula($('fp').value,{n:+$('cnt').value,bpm:+$('bpm').value,scale:$('sc').value,span:+$('span').value,rhythm:$('fr').value});
+  }catch(e){ $('err').textContent=e.message; $('fp').classList.add('bad'); tune=null; draw(); return false; }
+  draw();
+  if(play) go();
+  return true;
+}
+function go(){
+  if(!tune&&!build(false)) return;
+  Musician.stop();
+  Musician.play(tune,{cfg:CONFIG,voice:$('vo').value});
+}
+function draw(){
+  const c=$('plot'), r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  c.width=r.width*dpr; c.height=r.height*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr);
+  const W=r.width, H=r.height; g.clearRect(0,0,W,H);
+  if(!tune){ $('names').textContent=''; return; }
+  const midi=x=>{ const m=/^([A-G])(#?)(\d)$/.exec(x), B={C:0,D:2,E:4,F:5,G:7,A:9,B:11}; return 12*(+m[3]+1)+B[m[1]]+(m[2]?1:0); };
+  const ps=tune.notes.filter(n=>n[0]).map(n=>midi(n[0]));
+  const lo=Math.min(...ps,60)-1, hi=Math.max(...ps,72)+1, total=tune.notes.reduce((s,n)=>s+n[1],0);
+  g.strokeStyle='#2a2f52'; g.lineWidth=1;
+  for(let m=Math.ceil(lo);m<=hi;m++){ if(m%12===0){ const y=H-(m-lo)/(hi-lo)*H; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); } }
+  let t=0; g.fillStyle='#d4a94a';
+  for(const n of tune.notes){
+    if(n[0]){ const y=H-(midi(n[0])-lo)/(hi-lo)*H, x=t/total*W, w=Math.max(3,n[1]/total*W-2); g.fillRect(x,y-4,w,8); }
+    t+=n[1];
+  }
+  $('names').textContent=tune.notes.map(n=>n[0]||'0').join(' ');
+}
+$('go').onclick=()=>build(true);
+$('stop').onclick=()=>Musician.stop();
+for(const id of ['fp','fr']) $(id).addEventListener('keydown',e=>{ if(e.key==='Enter') build(true); });
+for(const id of ['fp','fr','cnt','bpm','sc','span']) $(id).addEventListener('input',()=>build(false));
+$('vo').onchange=()=>{ if(tune) go(); };
+$('copy').onclick=()=>{
+  const q=new URLSearchParams({f:$('fp').value,r:$('fr').value,n:$('cnt').value,b:$('bpm').value,s:$('sc').value,o:$('span').value,v:$('vo').value});
+  const u=location.origin+location.pathname+'?'+q; try{ navigator.clipboard.writeText(u); $('err').style.color='var(--gold)'; $('err').textContent='連結已複製'; setTimeout(()=>{$('err').textContent='';$('err').style.color='';},1500); }catch(e){}
+};
+{ const q=new URLSearchParams(location.search);   // 分享連結：只當資料讀進輸入框，公式仍走同一個白名單解析器
+  if(q.get('f')) $('fp').value=q.get('f'); if(q.get('r')!=null) $('fr').value=q.get('r'); if(q.get('n')) $('cnt').value=q.get('n');
+  if(q.get('b')) $('bpm').value=q.get('b'); if(q.get('s')) $('sc').value=q.get('s'); if(q.get('o')) $('span').value=q.get('o');
+  if(q.get('v')&&FN_VOICES.includes(q.get('v'))) $('vo').value=q.get('v'); }
+window.addEventListener('resize',draw);
+build(false);
+</script>
+</body>
+</html>

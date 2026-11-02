@@ -149,10 +149,10 @@
     <details><summary><span data-t="cp.jp"></span>：<b id="jpName"></b></summary><textarea id="jp" readonly></textarea></details>
   </section>
 
-<script src="config.js?v=1.21.00"></script>
-<script src="strings.zh.js?v=1.21.00"></script>
-<script src="musician.js?v=1.21.00"></script>
-<script src="composer.js?v=1.21.00"></script>
+<script src="config.js?v=1.24.01"></script>
+<script src="strings.zh.js?v=1.24.01"></script>
+<script src="musician.js?v=1.24.01"></script>
+<script src="composer.js?v=1.24.01"></script>
 <script>
 applyText(CONFIG); applyStaticText();
 Musician.setSamples(SAMPLES, 'samples/vsco/');
@@ -404,7 +404,7 @@ function kbPress(k){
 function kbDraw(){
   const kb = $('kb'); if(!kb) return;
   const rec = mode() === 'melody';
-  const cap = (k, lab, cls, col, row) => `<div class="kc ${cls || ''}" data-k="${k}" style="grid-column:${col} / span 2; grid-row:${row}"><b>${k.toUpperCase()}</b>${lab}</div>`;
+  const cap = (k, lab, cls, col, row) => `<div role="button" tabindex="0" class="kc ${cls || ''}" data-k="${k}" style="grid-column:${col} / span 2; grid-row:${row}"><b>${k.toUpperCase()}</b>${lab}</div>`;
   let keys = '';
   [1,2,3,4,5,6,7,8,9,0].forEach((d, i) => keys += cap(String(d), d === 0 ? '休止' : d === 8 ? '1̇' : d === 9 ? '2̇' : String(d), '', 1 + i * 2, 1));
   [['q','#1'],['w','#2'],['e',''],['r','#4'],['t','#5'],['y','#6'],['u',''],['i','#1̇']].forEach(([k, l], i) =>

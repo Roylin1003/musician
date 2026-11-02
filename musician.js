@@ -57,7 +57,10 @@ const Musician = (() => {
              timpani:{gain:0.70,drop:1.35,dropTime:0.07,decay:1.1,thump:0.5},
              harp:{gain:0.35,decay:1.8,h2:0.4,h3:0.15},
              shamisen:{gain:0.55,decay:1.0,bright:0.85,sawari:3,bachi:0.25},
-             guzheng:{gain:0.55,decay:2.6,bright:0.45,vibDelay:0.25,vibRate:5.5,vibDepth:18} },
+             guzheng:{gain:0.55,decay:2.6,bright:0.45,vibDelay:0.25,vibRate:5.5,vibDepth:18},
+             fm:{gain:0.22,attack:0.004,release:0.08,ratio:2,iStart:5,iEnd:0.6,tau:0.12},
+             folder:{gain:0.22,attack:0.004,release:0.08,gStart:6,gEnd:1.2,tau:0.15},
+             monster:{gain:0.12,attack:0.006,release:0.10,layers:4,ratio:3,amp:0.55} },
     chord: { root:0.30, triad:0.13, attack:0.18 },
   };
 
@@ -252,7 +255,53 @@ const Musician = (() => {
       lfo.connect(lg); lg.connect(src.detune); lfo.start(t); lfo.stop(t+P.decay);
       src.start(t); src.stop(t+P.decay);
     },
+    /* ── 函數音色（v1.24.00，Master 看數學函數音樂影片的點子）：公式就是音色 ──
+       fm：y=sin(2πft + I(t)·sin(2π·ratio·f·t))，I(t) 從 iStart 衰減到 iEnd（時間常數 tau 秒）——起音咬、之後乾淨 */
+    fm(hz,t,dur,out,P){
+      const c=actx.createOscillator(), m=actx.createOscillator(), mg=actx.createGain();
+      c.type='sine'; c.frequency.value=hz; m.type='sine'; m.frequency.value=hz*P.ratio;
+      mg.gain.setValueAtTime(hz*P.ratio*P.iStart,t);           // 頻率偏移＝I·調變頻率
+      mg.gain.setTargetAtTime(hz*P.ratio*P.iEnd,t,P.tau);
+      m.connect(mg); mg.connect(c.frequency);
+      shapeEnv(c,out,t,dur,P);
+      m.start(t); m.stop(t+dur+0.05);
+    },
+    /* folder：y=1−4|frac((g·sinφ+1)/4)−½|，增益 g 從 gStart 降到 gEnd＝折痕由多變少（越硬越多折） */
+    folder(hz,t,dur,out,P){
+      const o=actx.createOscillator(), pre=actx.createGain(), sh=actx.createWaveShaper();
+      o.type='sine'; o.frequency.value=hz; sh.curve=foldCurve(); sh.oversample='2x';
+      pre.gain.setValueAtTime(P.gStart/FOLD_MAX,t);
+      pre.gain.setTargetAtTime(P.gEnd/FOLD_MAX,t,P.tau);
+      o.connect(pre); pre.connect(sh);
+      shapeEnv(sh,out,t,dur,P,o);
+    },
+    /* monster：魏爾斯特拉斯 W=Σ aⁿ·cos(ratioⁿ·πx)——頻率每層乘 ratio、振幅每層乘 a，高到 12kHz 為止 */
+    monster(hz,t,dur,out,P){
+      const mix=actx.createGain(); let a=1;
+      for(let n=0;n<P.layers;n++,a*=P.amp){
+        const f=hz*Math.pow(P.ratio,n); if(f>12000) break;
+        const o=actx.createOscillator(), g=actx.createGain();
+        o.type='sine'; o.frequency.value=f; g.gain.value=a;
+        o.connect(g); g.connect(mix); o.start(t); o.stop(t+dur+0.05);
+      }
+      shapeEnv(mix,out,t,dur,P);
+    },
   };
+  // 函數音色共用包絡：attack 線性起音、到音尾前 release 放掉；src 是要接上包絡的節點（振盪器要順便 start）
+  function shapeEnv(src,out,t,dur,P,startNode){
+    const g=actx.createGain(), rel=Math.min(P.release,dur*0.5), peak=P.gain;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(peak,t+P.attack);
+    g.gain.setValueAtTime(peak,Math.max(t+P.attack,t+dur-rel)); g.gain.linearRampToValueAtTime(0,t+dur);
+    src.connect(g); g.connect(out);
+    const s=startNode||src; if(s.start){ s.start(t); s.stop(t+dur+0.05); }
+  }
+  const FOLD_MAX=8; let foldC=null;   // WaveShaper 只吃 [-1,1]：把 u=g·sinφ 的範圍 [-8,8] 壓進去，pre 增益＝g/8
+  function foldCurve(){
+    if(foldC) return foldC;
+    const N=2049; foldC=new Float32Array(N);
+    for(let i=0;i<N;i++){ const u=(i/(N-1)*2-1)*FOLD_MAX, v=(u+1)/4; foldC[i]=1-4*Math.abs(v-Math.floor(v)-0.5); }
+    return foldC;
+  }
   /* Karplus-Strong 緩衝：同音高＋同參數算一次就快取（一顆音 1～3 秒的 Float32）。
      環長取整數會走音，用 playbackRate 補回：實測週期＝N－(1－bright)/2 取樣（平均濾波讀的是「下一格」，週期變短；
      scratch 驗算 b=0.85/0.45/0 × N=109/54 全吻合到 0.01 取樣）。
@@ -610,6 +659,80 @@ const Musician = (() => {
              chords:opts.chords===undefined?false:opts.chords, notes };
   }
 
+  /* ── 公式 → tune（v1.24.01，Master：「輸入程式產生音樂」）──
+     fromFormula('floor(7*frac(n*phi))', {n:32, scale:'major', rhythm:'1'})
+     公式的變數是 n（第幾顆音，從 0 起算）；算出來的數是「音級」（整數，0＝主音，往上走音階，負數往下），
+     用音階對到音高，再用鏡射折進 span 個八度內——公式再野，旋律也不會飛出耳朵能聽的範圍。
+     rhythm 公式算每顆音的拍數（量化到半拍、夾在 0.5–4）；音高算出不是有限數（除以零、sqrt(-1)）＝休止。
+     算式解析器是自己寫的遞迴下降（不用 eval）：只認白名單函數，貼別人分享的公式也安全。
+     ponytail: 沒有 let／函式定義／條件式；要更強再擴文法 */
+  const FORMULA_FN = {
+    sin:Math.sin, cos:Math.cos, tan:Math.tan, abs:Math.abs, floor:Math.floor, ceil:Math.ceil,
+    round:Math.round, sqrt:Math.sqrt, exp:Math.exp, ln:Math.log, log2:Math.log2, sign:Math.sign,
+    frac:x=>x-Math.floor(x), pow:Math.pow, min:Math.min, max:Math.max,
+    mod:(a,b)=>a-b*Math.floor(a/b),          // 數學的 mod：結果跟除數同號（負數也不翻車）
+  };
+  const FORMULA_CONST = { pi:Math.PI, tau:2*Math.PI, e:Math.E, phi:(1+Math.sqrt(5))/2 };
+  function compileFormula(text){
+    const src=String(text).replace(/π/g,'pi').replace(/φ/g,'phi').replace(/τ/g,'tau').replace(/[·×]/g,'*').replace(/−/g,'-').replace(/\s+/g,'').toLowerCase();
+    if(!src) throw new Error('公式是空的');
+    if(src.length>300) throw new Error('公式太長（上限 300 字）');
+    let p=0, sumBudget=20000;
+    const peek=()=>src[p];
+    const fail=m=>{ throw new Error(m+'（第 '+(p+1)+' 個字附近）'); };
+    function expr(){ let a=term(); while(peek()==='+'||peek()==='-'){ const op=src[p++], b=term(), l=a; a=op==='+'?env=>l(env)+b(env):env=>l(env)-b(env); } return a; }
+    function term(){ let a=unary(); while(peek()==='*'||peek()==='/'||peek()==='%'){ const op=src[p++], b=unary(), l=a;
+      a=op==='*'?env=>l(env)*b(env):op==='/'?env=>l(env)/b(env):env=>FORMULA_FN.mod(l(env),b(env)); } return a; }
+    function unary(){ if(peek()==='-'){ p++; const a=unary(); return env=>-a(env); } if(peek()==='+'){ p++; return unary(); } return power(); }
+    function power(){ const a=atom(); if(peek()==='^'){ p++; const b=unary(); return env=>Math.pow(a(env),b(env)); } return a; }   // 右結合：2^3^2＝2^(3^2)
+    function atom(){
+      const c=peek();
+      if(c==='('){ p++; const a=expr(); if(peek()!==')') fail('少了右括號'); p++; return a; }
+      if((c>='0'&&c<='9')||c==='.'){ const m=/^(\d+\.?\d*|\.\d+)/.exec(src.slice(p)); if(!m) fail('數字格式不對'); p+=m[0].length; const v=+m[0]; return ()=>v; }
+      const m=/^[a-z_][a-z0-9_]*/.exec(src.slice(p)); if(!m) fail('看不懂「'+(c||'結尾')+'」');
+      const name=m[0]; p+=name.length;
+      if(peek()==='('){
+        p++;
+        if(name==='sum'){            // sum(i, 起, 迄, 算式)：Σ，變數名自取
+          const v=/^[a-z_][a-z0-9_]*/.exec(src.slice(p)); if(!v) fail('sum 第一個參數要是變數名'); p+=v[0].length;
+          if(peek()!==',') fail('sum 少了逗號'); p++;
+          const lo=expr(); if(peek()!==',') fail('sum 少了逗號'); p++;
+          const hi=expr(); if(peek()!==',') fail('sum 少了逗號'); p++;
+          const body=expr(); if(peek()!==')') fail('少了右括號'); p++;
+          const vn=v[0];
+          return env=>{ const a=Math.ceil(lo(env)), b=Math.floor(hi(env)); if(!(b-a<=10000)) return NaN;
+            if((sumBudget-=Math.max(0,b-a+1))<0) return NaN;
+            const saved=env[vn]; let t=0; for(let i=a;i<=b;i++){ env[vn]=i; t+=body(env); } env[vn]=saved; return t; };
+        }
+        if(!Object.prototype.hasOwnProperty.call(FORMULA_FN,name)) fail('不認得函數「'+name+'」');
+        const fn=FORMULA_FN[name], args=[]; if(peek()!==')'){ do{ if(peek()===',')p++; args.push(expr()); }while(peek()===','); }
+        if(peek()!==')') fail('少了右括號'); p++;
+        return env=>fn(...args.map(a=>a(env)));
+      }
+      if(Object.prototype.hasOwnProperty.call(FORMULA_CONST,name)){ const v=FORMULA_CONST[name]; return ()=>v; }
+      return env=>{ const v=Object.prototype.hasOwnProperty.call(env,name)?env[name]:NaN; return v; };   // 沒宣告的名字＝NaN＝休止
+    }
+    const tree=expr(); if(p<src.length) fail('多出來的字「'+src[p]+'」');
+    return env=>{ sumBudget=20000; return tree(env); };
+  }
+  const SCALES={ major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pentatonic:[0,2,4,7,9], chromatic:[0,1,2,3,4,5,6,7,8,9,10,11] };
+  function fromFormula(text, opts={}){
+    const pitch=compileFormula(text), rhythm=compileFormula(opts.rhythm==null||opts.rhythm===''?'1':opts.rhythm);
+    const count=Math.max(1,Math.min(512,Math.floor(opts.n||32)));
+    const sc=SCALES[opts.scale]||SCALES.major, L=sc.length, span=Math.max(1,opts.span||2), R=L*span;
+    const base=opts.base==null?4:opts.base, NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const notes=[];
+    for(let n=0;n<count;n++){
+      const env={n}, d=Math.round(pitch(env)), r=rhythm({n});
+      const beats=Number.isFinite(r)?Math.min(4,Math.max(0.5,Math.round(r*2)/2)):1;
+      if(!Number.isFinite(d)){ notes.push([null,beats]); continue; }
+      const m=((d%(2*R))+2*R)%(2*R), deg=m<R?m:2*R-1-m;          // 鏡射折回 [0,R)
+      const midi=12*(base+1)+sc[deg%L]+12*Math.floor(deg/L), k=((midi%12)+12)%12;
+      notes.push([NAMES[k]+(Math.floor(midi/12)-1), beats]);
+    }
+    return { id:'formula', name:opts.name||'公式', composer:opts.composer||'公式作曲', bpm:opts.bpm||120, chords:false, notes };
+  }
+
   /* tune → 簡譜 token（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）。
      每個 token：{d 音級字元, acc 升降, oct 八度偏移（＋高／－低，UI 畫點）,
                   beats 拍數, at 起拍, sec 起秒, dur 秒, i 原始 notes 索引}
@@ -650,7 +773,7 @@ const Musician = (() => {
     return p>curLen+0.5 ? -1 : Math.max(0,p);
   }
 
-  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, toJianpu, position,
+  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, fromFormula, toJianpu, position,
            setMuted, get muted(){ return userMuted; },
            tail:()=>curTail,   // 上一次播放算出的尾音緩衝（秒）——自檢台用它守這條回歸
            get voices(){ return Object.keys(VOICES); },

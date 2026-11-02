@@ -14,6 +14,9 @@ const TEXT = {
   'ui.voice.timpani': '定音鼓',
   'ui.voice.harp':    '豎琴',
   'ui.voice.shamisen':'三味線',
+  'ui.voice.fm':      'FM 咬音',
+  'ui.voice.folder':  '折疊音',
+  'ui.voice.monster': '怪物音',
   'ui.voice.guzheng': '古箏',
   'ui.voice.r_vln':   '真·小提琴', 'ui.voice.r_cello': '真·大提琴', 'ui.voice.r_trem': '真·弦樂顫音',
   'ui.voice.r_tbn':   '真·長號',   'ui.voice.r_tuba':  '真·低音號', 'ui.voice.r_tpt':  '真·小號',
@@ -39,6 +42,7 @@ const TEXT = {
   'cp.jpBack':        '改回格子',
   'cp.jpAsk':         (err, name) => err + '，格子放不下。要把「' + name + '」改成簡譜軌（直接用簡譜演奏）嗎？',
   'tab.create':       '🧱 創作台 →',
+  'tab.formula':      '∑ 公式 →',
   'orch.edit':        '在創作台打開',
   'credits.samples':  '真樂器取樣：VSCO 2 Community Edition（Versilian Studios，CC0）',
   'orch.title':   '多聲部配樂',
@@ -88,7 +92,7 @@ const TEXT = {
   'ui.beats':     n => n + ' 拍',
   'score.title':  '簡譜',
   'score.hint':   '演奏時跟著亮；數字上方的點＝高八度，下方的點＝低八度（覺得太低就看點在哪裡，用混音師面板的「移調半音」整首搬上去）',
-  'score.empty':  '點下面任一首曲子，音符會在這裡跟著發光',
+  'score.empty':  '點一首曲子，音符會在這裡發光',
   'jp.radix':     '進位',
   'jp.radix10':   '10 進位',
   'jp.radix16':   '16 進位',
@@ -107,7 +111,7 @@ const TEXT = {
 
 /* docgen 與遊戲端共用的入口。缺字 console 點名，不靜靜留空 */
 function applyText(CONFIG){
-  ['chip','crystal','piano','strings','flute','brass','choir','timpani','harp','shamisen','guzheng'].forEach(v=>{
+  ['chip','crystal','piano','strings','flute','brass','choir','timpani','harp','shamisen','guzheng','fm','folder','monster'].forEach(v=>{
     if(!TEXT['ui.voice.'+v]) console.warn('[strings] 缺音色名稱 ui.voice.'+v);
   });
   return CONFIG;
