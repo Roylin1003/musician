@@ -17,7 +17,7 @@
     var page=el.getAttribute('data-page')||'listen', make=page==='brick'||page==='formula';
     el.className='mnav';
     var a=function(href,txt,on){ return '<a href="'+href+'"'+(on?' class="on"':'')+'>'+txt+'</a>'; };
-    el.innerHTML=a('index.html',T('nav.listen','聽'),page==='listen')+a('composer.html',T('nav.make','做'),make)+
+    el.innerHTML=a('index.html',T('nav.listen','聆聽'),page==='listen')+a('composer.html',T('nav.make','創作'),make)+
       '<button id="mpal" type="button" title="換色票"></button>';
     document.getElementById('mpal').onclick=function(){ set(LIST[(LIST.indexOf(get())+1)%LIST.length]); };
     paint(get());
