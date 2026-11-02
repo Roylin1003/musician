@@ -69,10 +69,10 @@
   </section>
 </main>
 
-<script src="config.js?v=1.25.04"></script>
-<script src="strings.zh.js?v=1.25.04"></script>
-<script src="musician.js?v=1.25.04"></script>
-<script src="classics.js?v=1.25.04"></script>
+<script src="config.js?v=1.25.05"></script>
+<script src="strings.zh.js?v=1.25.05"></script>
+<script src="musician.js?v=1.25.05"></script>
+<script src="classics.js?v=1.25.05"></script>
 <script>
 const $=id=>document.getElementById(id);
 const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];
@@ -149,18 +149,37 @@ $('video').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const
 function load(s){ state=s; $('bpm').value=s.bpm||120; paintTracks(); }
 
 let chunk=0, playing=false, raf=0;   // 持續播放：每一段接著上一段的 n 往下算（旋律繼續演化，不是原曲重複）
+let offs=[], used=[];   // 每軌「接續演化」已經用掉幾個 n（或拍）；每段長度不同，所以每軌各記各的
+const trunc=(notes,L)=>{ const out=[]; let acc=0; for(const n of notes){ if(acc+n[1]>L+1e-9){ if(L-acc>1e-6) out.push([n[0],L-acc]); break; } out.push(n); acc+=n[1]; if(acc>=L-1e-9) break; } return out; };
+const total=notes=>notes.reduce((x,n)=>x+n[1],0);
 function build(play){
   $('err').textContent=''; document.querySelectorAll('.trk input.bad').forEach(x=>x.classList.remove('bad'));
-  const parts=[]; const cnt=+$('cnt').value, beats=+$('beats').value;
+  const cnt=+$('cnt').value, beats=+$('beats').value, sc=$('sc').value, span=+$('span').value;
+  const parts=[]; used=[];
   try{
+    const mk=(t,i,n,off)=>{ try{ return Musician.fromFormula(t.f,{n,scale:sc,span,base:t.base,rhythm:t.r,offset:off}).notes; }
+      catch(e){ const el=document.querySelector('.trk[data-i="'+i+'"] input[data-k="f"]'); if(el) el.classList.add('bad'); throw new Error('「'+t.name+'」：'+e.message); } };
+    const pulse=(t,i,off)=>{ try{ return Musician.fromPulse(t.f,{beats,pitch:'C'+t.base,offset:off}).notes; }
+      catch(e){ const el=document.querySelector('.trk[data-i="'+i+'"] input[data-k="f"]'); if(el) el.classList.add('bad'); throw new Error('「'+t.name+'」：'+e.message); } };
+    // 第一輪：音高軌先照「音數」生一遍，量出整段長度 L＝最長的那一軌；沒有音高軌就用「拍數」
+    const nat=state.tracks.map((t,i)=>t.kind==='pitch'?mk(t,i,cnt,offs[i]||0):null);
+    let L=Math.max(0,...nat.filter(Boolean).map(total)); if(!(L>0)) L=beats;
+    // 第二輪：每一軌都補到 L 一樣長（太短的鼓／旋律會「播一小段就沒了」）
     state.tracks.forEach((t,i)=>{
-      const el=document.querySelector('.trk[data-i="'+i+'"] input[data-k="f"]');
-      let notes;
-      try{
-        notes=t.kind==='pulse'?Musician.fromPulse(t.f,{beats,pitch:'C'+t.base,offset:chunk*beats}).notes
-          :Musician.fromFormula(t.f,{n:cnt,scale:$('sc').value,span:+$('span').value,base:t.base,rhythm:t.r,offset:chunk*cnt}).notes;
-        if(t.voice==='wave') Musician.compileFormula(t.wave||'0');
-      }catch(e){ if(el) el.classList.add('bad'); throw new Error('「'+t.name+'」：'+e.message); }
+      let notes, u;
+      if(t.kind==='pitch'){
+        notes=nat[i]; u=cnt;
+        if(total(notes)<L-1e-9){ const per=total(notes)/cnt||1; u=Math.min(512,Math.ceil(L/per)+1); notes=mk(t,i,u,offs[i]||0); }
+        notes=trunc(notes,L);
+        // used＝實際用掉幾顆音（下一段從這裡接續）
+        u=Math.min(u,notes.length);
+      }else{
+        const cycles=Math.max(1,Math.ceil(L/beats)); notes=[];
+        for(let c=0;c<cycles;c++) notes=notes.concat(pulse(t,i,(offs[i]||0)+c*beats));
+        notes=trunc(notes,L); u=cycles*beats;
+      }
+      if(t.voice==='wave'){ try{ Musician.compileFormula(t.wave||'0'); }catch(e){ throw new Error('「'+t.name+'」波形：'+e.message); } }
+      used[i]=u;
       const P={}; if(t.bounce>0) P.bounce=t.bounce; if(t.bell>0) P.bell=t.bell; if(t.voice==='wave') P.expr=t.wave;
       parts.push({name:t.name,voice:t.voice,vol:t.vol,mute:t.mute,notes,P,_kind:t.kind});
     });
@@ -171,10 +190,10 @@ function build(play){
 function go(){
   if(!tune&&!build(false)) return; if(!tune.parts.length){ $('err').textContent='至少要有一軌'; return; }
   Musician.stop(); playing=true;
-  Musician.play(tune,{cfg:CONFIG,onend:()=>{ const m=$('mode').value; if(!playing||m==='once'){ playing=false; return; } if(m==='continue') chunk++; if(build(false)) go(); else playing=false; }});
+  Musician.play(tune,{cfg:CONFIG,onend:()=>{ const m=$('mode').value; if(!playing||m==='once'){ playing=false; return; } if(m==='continue'){ chunk++; used.forEach((u,i)=>{ offs[i]=(offs[i]||0)+u; }); } if(build(false)) go(); else playing=false; }});
   if(!raf) raf=requestAnimationFrame(frame);
 }
-function startFresh(){ chunk=0; if(build(false)) go(); }
+function startFresh(){ chunk=0; offs=[]; if(build(false)) go(); }
 function draw(pos){
   if(pos==null) pos=-1;
   const c=$('plot'), r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
