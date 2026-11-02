@@ -4,43 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>公式作曲台 · Royal Musician</title>
+<link rel="stylesheet" href="musician-theme.css?v=1.26.00">
+<script src="musician-shell.js?v=1.26.00"></script>
 <style>
-  :root{ --bg:#0e1122; --panel:#171b33; --line:#2a2f52; --text:#e8e4d8; --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8; --bad:#e08a8a; }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{background:var(--bg); color:var(--text); font:18px/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif; padding:16px; display:flex; flex-direction:column; align-items:center; gap:14px; min-height:100vh;}
   button,select,input{font:inherit; color:inherit;}
   button,select{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px 14px; cursor:pointer; min-height:44px;}
   button:hover{border-color:var(--blue);}
-  header{width:min(1500px,100%); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;}
-  h1{font-size:28px; color:var(--gold); letter-spacing:2px;}
-  header a{color:var(--muted); font-size:16px; text-decoration:none;}
   main{width:min(1500px,100%); display:grid; grid-template-columns:1fr; gap:14px;}
   @media(min-width:1000px){ main{grid-template-columns:minmax(520px,6fr) 5fr; align-items:start;} }
   .box{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;}
   label.f{color:var(--muted); font-size:15px; display:flex; flex-direction:column; gap:4px;}
-  input[type=text]{width:100%; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-family:Consolas,"Courier New",monospace; font-size:18px; color:var(--gold);}
+  input[type=text]{width:100%; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-family:Consolas,"Courier New",monospace; font-size:18px; color:var(--gold);}
   input[type=text].bad{border-color:var(--bad);}
-  input[type=number]{width:76px; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold); min-height:44px;}
+  input[type=number]{width:76px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold); min-height:44px;}
   .row{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;}
   .chips{display:flex; flex-wrap:wrap; gap:8px;}
   .chips button{font-size:16px; padding:6px 12px;}
   #err{color:var(--bad); min-height:1.5em; font-size:16px;}
   #go{border-color:var(--gold); color:var(--gold); padding:6px 32px;}
-  .trk{border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; background:#141830;}
+  .trk{border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; background:var(--panel2);}
   .trk .th{display:flex; gap:8px; align-items:center;}
   .trk .th b{width:14px; height:14px; border-radius:50%; flex:none;}
   .trk .th input.nm{flex:1; min-width:0; background:transparent; border:0; border-bottom:1px solid var(--line); color:var(--text); font-size:18px; padding:4px;}
   .trk .th label{display:flex; gap:6px; align-items:center; color:var(--muted); font-size:15px;}
   .trk .th input[type=checkbox]{width:22px; height:22px;}
   .trk .th button.x{padding:2px 12px;}
-  #plot{width:100%; height:clamp(220px,40vh,520px); background:#10142a; border:1px solid var(--line); border-radius:12px; display:block;}
+  #plot{width:100%; height:clamp(220px,40vh,520px); background:var(--bg); border:1px solid var(--line); border-radius:12px; display:block;}
   #now{min-height:2.2em; font-size:22px; color:var(--gold); font-family:Consolas,monospace; display:flex; gap:18px; flex-wrap:wrap;}
   #now span{white-space:nowrap;}
   #names{color:var(--muted); font-size:15px; word-break:break-all; max-height:9em; overflow:auto;}
 </style>
 </head>
 <body>
-<header><h1>公式作曲台</h1><a href="index.html">← 音樂家</a><a href="composer.html">創作台</a></header>
+<header class="mtop" style="width:min(1500px,100%)"><h1>公式作曲台</h1><span id="mnav" data-page="formula"></span></header>
 <main>
   <section class="box">
     <div id="tracks" style="display:flex; flex-direction:column; gap:10px;"></div>
@@ -69,10 +67,10 @@
   </section>
 </main>
 
-<script src="config.js?v=1.25.05"></script>
-<script src="strings.zh.js?v=1.25.05"></script>
-<script src="musician.js?v=1.25.05"></script>
-<script src="classics.js?v=1.25.05"></script>
+<script src="config.js?v=1.26.00"></script>
+<script src="strings.zh.js?v=1.26.00"></script>
+<script src="musician.js?v=1.26.00"></script>
+<script src="classics.js?v=1.26.00"></script>
 <script>
 const $=id=>document.getElementById(id);
 const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];

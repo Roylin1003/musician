@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>積木編輯器 · Royal Musician</title>
+<link rel="stylesheet" href="musician-theme.css?v=1.26.00">
+<script src="musician-shell.js?v=1.26.00"></script>
 <style>
-  :root{ --bg:#0e1122; --panel:#171b33; --panel2:#1d2433; --line:#2a2f52; --text:#e8e4d8;
-         --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8; --hdrW:200px; }
+  :root{ --hdrW:200px; }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{height:100%;}
   body{background:var(--bg); color:var(--text); font:18px/1.4 "Noto Sans TC","Microsoft JhengHei",sans-serif;
@@ -16,15 +17,14 @@
   button:hover{border-color:var(--blue);}
   button.on{border-color:var(--gold); color:var(--gold);}
 
-  #bar{grid-column:1/3; display:flex; align-items:center; gap:14px; padding:0 24px; background:#1c1c24; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  #bar{grid-column:1/3; display:flex; align-items:center; gap:14px; padding:0 24px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap;}
   #bar h1{font-size:28px; color:var(--gold); letter-spacing:2px; margin-right:12px;}
-  #bar a{color:var(--muted); font-size:16px; text-decoration:none;}
   #bar label{display:flex; gap:8px; align-items:center; color:var(--muted); font-size:16px;}
   #bar input[type=number]{width:72px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold);}
   #tutBtn{margin-left:auto;} #play{border-color:var(--gold); color:var(--gold); padding:8px 28px;}
 
   /* 左欄：上＝這一步要做什麼＋積木，下＝存取工具 */
-  #palette{background:#23232e; border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0;}
+  #palette{background:var(--panel2); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0;}
   #step{padding:12px 20px; font-size:20px; color:var(--gold); border-bottom:1px solid var(--line);}
   #pal{flex:1; overflow-y:auto; padding:16px 20px;}
   .grp{color:var(--muted); font-size:16px; margin:14px 0 8px;} .grp:first-child{margin-top:0;}
@@ -55,7 +55,7 @@
   .cell,.hd{border-radius:12px;}
   .ruler{color:var(--muted); font-size:18px; text-align:center; padding-top:6px; cursor:default; border-radius:8px;}
   .ruler.now,.cell.now{outline:3px solid var(--blue);}
-  .hd{position:sticky; left:0; z-index:2; background:#23232e; border:1px solid var(--line); padding:6px 10px; overflow:hidden;
+  .hd{position:sticky; left:0; z-index:2; background:var(--panel2); border:1px solid var(--line); padding:6px 10px; overflow:hidden;
       display:flex; flex-direction:column; justify-content:center; gap:6px; min-width:0;}
   .hd .nm{background:none; border:none; border-bottom:1px solid var(--line); flex:1; min-width:0; font-weight:700; padding:2px;}
   .hd .row{display:flex; gap:6px; align-items:center;}
@@ -70,7 +70,7 @@
   .cell.sel{border-color:var(--gold); box-shadow:0 0 0 3px var(--gold) inset; animation:pulse 1.4s ease-in-out 3;}
   @keyframes pulse{50%{box-shadow:0 0 0 7px var(--gold) inset;}}
   /* 電腦鍵盤琴（v1.21.00）：數字排＝白鍵（簡譜 1–9）、Q 排＝黑鍵（錯半格，跟鋼琴一樣夾在中間）、0 休止 */
-  #kb{flex:none; border-top:1px solid var(--line); background:#1c1c24; padding:10px 14px; display:flex; gap:18px; align-items:center;}
+  #kb{flex:none; border-top:1px solid var(--line); background:var(--panel); padding:10px 14px; display:flex; gap:18px; align-items:center;}
   #kb .kbl{color:var(--muted); font-size:15px; min-width:150px;}
   #kb .kbl b{display:block; color:var(--gold); font-size:16px;}
   #kb .keys{display:grid; grid-template-columns:repeat(21,30px); grid-template-rows:46px 46px; gap:4px 0;}
@@ -79,7 +79,7 @@
   #kb .kc b{font-size:19px; color:var(--text);}
   #kb .kc.bk{background:#0b0d18;} #kb .kc.bk b{color:var(--blue);}
   #kb .kc.off{visibility:hidden;}
-  #kb .kc.hit{background:var(--gold); border-color:var(--gold);} #kb .kc.hit b,#kb .kc.hit{color:#1c1c24;}
+  #kb .kc.hit{background:var(--gold); border-color:var(--gold);} #kb .kc.hit b,#kb .kc.hit{color:var(--bg);}
   #kb .side{display:flex; gap:8px;} #kb .side .kc{width:64px; height:46px; grid-column:auto;}
   #mel .col.cur{color:var(--gold); font-weight:700;} #mel .st.cur{outline:2px solid var(--gold);}
   @media (max-width:900px){ #kb{display:none;} }
@@ -91,7 +91,7 @@
     .cell.chordc{font-size:22px;}
     details{display:none;}
   }
-  details{flex:none; border-top:1px solid var(--line); background:#1c1c24; padding:8px 14px;}
+  details{flex:none; border-top:1px solid var(--line); background:var(--panel); padding:8px 14px;}
   summary{cursor:pointer; color:var(--muted); font-size:16px;}
   #jp{width:100%; height:64px; margin-top:8px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px;
       font:16px Consolas,monospace; color:var(--blue); resize:none;}
@@ -103,7 +103,7 @@
     #bar{grid-column:1; padding:10px 12px; gap:8px;} #bar h1{font-size:22px;}
     #palette{grid-row:3; border-right:none; border-top:1px solid var(--line);}
     #step{padding:8px 12px; font-size:17px;} #pal{padding:10px 12px;}
-    #tools{padding:6px 12px; flex-wrap:nowrap; overflow-x:auto;} #tools button{padding:6px 10px; font-size:15px; white-space:nowrap; flex:none;} #msg{position:absolute; bottom:60px; left:12px; width:auto; background:#1c1c24; padding:2px 8px; border-radius:6px;}
+    #tools{padding:6px 12px; flex-wrap:nowrap; overflow-x:auto;} #tools button{padding:6px 10px; font-size:15px; white-space:nowrap; flex:none;} #msg{position:absolute; bottom:60px; left:12px; width:auto; background:var(--panel); padding:2px 8px; border-radius:6px;}
     #main{grid-row:2;}
     .blocks{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));}
     .hd{padding:6px;} .hd input[type=range]{width:60px;} .cell{min-height:84px; white-space:normal;}
@@ -121,7 +121,7 @@
 <body>
   <div id="bar">
     <h1 data-t="cp.title"></h1>
-    <a href="index.html" data-t="cp.back"></a>
+    <span id="mnav" data-page="brick" style="margin-left:0"></span>
     <label><span data-t="cp.bpm"></span><input id="bpm" type="number" min="40" max="240"></label>
     <button id="addBars" data-t="cp.addBars"></button><button id="delBars" data-t="cp.delBars"></button>
     <button id="example" data-t="cp.example"></button>
@@ -149,10 +149,10 @@
     <details><summary><span data-t="cp.jp"></span>：<b id="jpName"></b></summary><textarea id="jp" readonly></textarea></details>
   </section>
 
-<script src="config.js?v=1.25.05"></script>
-<script src="strings.zh.js?v=1.25.05"></script>
-<script src="musician.js?v=1.25.05"></script>
-<script src="composer.js?v=1.25.05"></script>
+<script src="config.js?v=1.26.00"></script>
+<script src="strings.zh.js?v=1.26.00"></script>
+<script src="musician.js?v=1.26.00"></script>
+<script src="composer.js?v=1.26.00"></script>
 <script>
 applyText(CONFIG); applyStaticText();
 Musician.setSamples(SAMPLES, 'samples/vsco/');

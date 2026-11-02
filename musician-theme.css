@@ -1,0 +1,33 @@
+/* musician-theme.css —— 三頁共用的色票與外殼樣式（改版提案階段 1，2026-11-02）
+   色票只寫在這裡一份：金固定，換底色（Master 的黑金／藍金／綠金；藍金是預設）。
+   舊頁面沿用的變數名（--panel、--gold、--blue…）全部保留，所以頁面本身的 CSS 不用改。
+   切換由 musician-shell.js 設 <html data-p="black|green">，記在 localStorage。 */
+:root{
+  --bg:#0e1325; --panel:#172040; --panel2:#1d2a52; --line:#2f3b6b;
+  --text:#ebe7da; --muted:#a6adc9;
+  --gold:#e0b24a; --blue:#7fb0e6; --bad:#e08a8a;
+  --sel:color-mix(in srgb,var(--gold) 12%,var(--panel));   /* 選中／播放中的卡片底色 */
+  /* 軌道固定六色（Okabe-Ito 色盲安全色調亮；三套底色上對比都 ≥ 5.2） */
+  --lane1:#e0b24a; --lane2:#56b4e9; --lane3:#e6805a; --lane4:#5fd0a0; --lane5:#cc79a7; --lane6:#b8b0f0;
+  color-scheme:dark;
+}
+:root[data-p="black"]{ --bg:#0d0d10; --panel:#17171c; --panel2:#202027; --line:#34333a; --text:#efe9dc; --muted:#a8a49a; --blue:#c9c3b2; }
+:root[data-p="green"]{ --bg:#0b1712; --panel:#13261d; --panel2:#1a3427; --line:#2a4a3a; --text:#ece8d6; --muted:#9fb5a6; --blue:#7fcfa0; }
+
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}
+button,select,input{font:inherit; color:inherit;}
+* {scrollbar-width:thin; scrollbar-color:var(--line) transparent;}
+
+/* 共用標題列：標題＋聽／做＋色票鍵（三頁一樣，位置不動） */
+.mtop{display:flex; align-items:center; gap:18px; flex-wrap:wrap;}
+.mtop h1{font-size:28px; letter-spacing:2px; color:var(--gold); font-weight:700;}
+.mnav{display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap;}
+.mnav a,.mnav button{background:var(--panel); border:1px solid var(--line); color:var(--muted); border-radius:10px;
+  padding:0 20px; min-height:44px; display:inline-flex; align-items:center; text-decoration:none; font-size:17px; cursor:pointer;}
+.mnav a:hover,.mnav button:hover{border-color:var(--blue);}
+.mnav a.on{border-color:var(--gold); color:var(--gold);}
+.mnav .msub{display:inline-flex; gap:6px; padding-left:10px; margin-left:2px; border-left:1px solid var(--line);}
+.mnav .msub a{min-height:44px; padding:0 14px; font-size:15px; border-radius:999px;}
+.mnav #mpal{padding:0 14px; font-size:15px;}
+@media (max-width:640px){ .mtop{gap:8px;} .mtop h1{font-size:17px; letter-spacing:1px;} .mnav{gap:6px;} .mnav a,.mnav button{padding:0 12px; font-size:15px;} .mnav .msub{padding-left:6px;} .mnav .msub a{padding:0 10px;} .mnav #mpal{padding:0 10px; font-size:0;} .mnav #mpal::before{content:'◐'; font-size:17px;} }

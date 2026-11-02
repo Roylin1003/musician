@@ -32,3 +32,9 @@
 
 /classics.js
   Cache-Control: public, max-age=0, must-revalidate
+
+/musician-theme.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/musician-shell.js
+  Cache-Control: public, max-age=0, must-revalidate

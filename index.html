@@ -4,501 +4,400 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Royal Musician 音樂家</title>
+<link rel="stylesheet" href="musician-theme.css?v=1.26.00">
+<script src="musician-shell.js?v=1.26.00"></script>
 <style>
-  :root{
-    --bg:#0e1122; --panel:#171b33; --line:#2a2f52; --text:#e8e4d8;
-    --muted:#8a8fa8; --gold:#d4a94a; --blue:#7ea7d8;
-    --colW:min(820px,100%);   /* 全頁同一欄寬：音色、簡譜、曲目、即興台、多聲部對齊同一條邊 */
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  body{
-    background:var(--bg); color:var(--text); min-height:100vh;
-    font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
-    display:flex; flex-direction:column; align-items:center;
-    padding:32px 16px 64px;
-  }
-  h1{font-size:28px; letter-spacing:2px; color:var(--gold);}
-  .sub{color:var(--muted); font-size:14px; margin:8px 0 24px;}
+  /* 聽（欣賞）頁骨架（改版提案階段 2，2026-11-02）：舞台在左、曲庫在右；手機由上到下同一順序。
+     色票在 musician-theme.css，這裡只寫版面。 */
+  :root{ --laneH:clamp(120px,17vh,220px); }
+  body{height:100dvh; display:flex; flex-direction:column; padding:14px 28px 20px; overflow:hidden;}
+  .mtop{flex:none; margin-bottom:12px;}
+  .app{flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,30vw,460px); gap:14px 24px; width:100%; max-width:2400px; margin:0 auto;}
+  .stagecol{display:flex; flex-direction:column; gap:10px; min-height:0;}
 
-  /* 音色區（2026-10-16 版面師／認知／考拉）：與曲目卡同寬、分兩組、同組等寬等高（同群按鍵規則） */
-  .voices{display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:8px;
-          width:var(--colW); margin-bottom:8px;}
-  .voices button{
-    background:var(--panel); color:var(--text); border:1px solid var(--line);
-    border-radius:10px; padding:9px 4px; font-size:15px; cursor:pointer; white-space:nowrap; min-height:42px;
-  }
-  .voices button.active{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
-  .vsep{grid-column:1/-1; color:var(--muted); font-size:13px; text-align:left; margin-top:6px;}
-  .vsep:first-child{margin-top:0;}
-  .credits{margin-top:40px; font-size:13px;} .credits a{color:var(--muted);}
-  @media (max-width:640px){ .voices{grid-template-columns:repeat(3,1fr);} }
-  #mixToggle.mixOn,#accToggle.mixOn{border-color:var(--blue); color:var(--blue); background:#141b33;}
-  .hint{color:var(--muted); font-size:13px; margin:10px 0 22px;}
+  .nowrow{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; min-height:34px; flex:none;}
+  .nowname{font-size:24px; color:var(--gold); font-weight:700;}
+  .noworig{font-size:15px; color:var(--blue); font-style:italic;}
 
-  .now{
-    height:28px; font-size:16px; color:var(--blue); margin-bottom:14px;
-    display:flex; align-items:center; gap:14px;
-  }
-  .now button{
-    background:none; border:1px solid var(--line); color:var(--muted);
-    border-radius:8px; padding:3px 14px; cursor:pointer; font-size:13px;
-  }
-  #modeBtn{color:var(--blue); border-color:var(--line); font-family:inherit;}
-  #muteBtn{font-size:15px; padding:3px 12px; line-height:1.4;}
-  #muteBtn.off{color:var(--gold); border-color:var(--gold);}
-
-  .tunes{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
-         gap:12px; width:var(--colW);}
-  .tune{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:14px 16px; cursor:pointer; text-align:left; color:var(--text);
-    display:flex; flex-direction:column; gap:4px; font-family:inherit;
-  }
-  .tune:hover{border-color:var(--blue);}
-  .tune.playing{border-color:var(--gold); background:#1e1a2e;}
-  .tune .name{font-size:17px;}
-  .tune .orig{font-size:11.5px; color:var(--blue); font-style:italic; opacity:.85;}
-  .tune .meta{font-size:12px; color:var(--muted);}
-  .chips{display:flex; gap:6px; margin-top:6px;}
-  .chip{font-size:12px; padding:3px 12px; border:1px solid var(--line); border-radius:999px;
-        background:none; color:var(--blue); cursor:pointer; font-family:inherit;}
-  .chip:hover{border-color:var(--gold); color:var(--gold);}
-  .chip.playing{border-color:var(--gold); color:var(--gold); background:#1e1a2e;}
-  .tune.playing .name{color:var(--gold);}
-
-  .score{width:var(--colW); margin-bottom:18px;}
-  .scoreHead{display:flex; gap:12px; align-items:baseline; margin-bottom:6px;}
-  .scoreHead>span:first-child{font-size:13px; color:var(--gold); letter-spacing:1px;
-                              flex:none; white-space:nowrap;}
-  .scoreHead .hint{margin:0; font-size:11.5px;}
-  .scoreStrip{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    height:70px; padding:14px 12px; overflow-x:auto; overflow-y:hidden;
-    white-space:nowrap; font-family:Consolas,"Noto Sans Mono",monospace;
-    scrollbar-width:thin;
-  }
-  .modeBtn{margin-left:auto; flex:none; background:var(--panel); border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:3px 12px; font-size:12px; cursor:pointer;}
-  #roll{display:block; width:100%; height:120px; background:var(--panel); border:1px solid var(--line); border-radius:10px;}
-  .scoreStrip .empty{color:var(--muted); font-size:13px; font-family:"Noto Sans TC",sans-serif;}
+  /* 舞台：捲簾高度＝軌數×每軌高（寬扁，不拉成高塔）；單旋律下面接簡譜全文，吃掉剩下的高度 */
+  .stage{flex:0 1 calc(var(--lanes,1) * var(--laneH)); min-height:0; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr);
+         background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  .stage:not(.multi){flex-basis:clamp(160px,30vh,340px);}   /* 單旋律：捲簾寬扁，剩下的高度給下面的簡譜全文 */
+  #roll{display:block; width:100%; height:100%; min-width:0;}
+  .lanectl{display:none; flex-direction:column; border-right:1px solid var(--line); width:clamp(150px,16vw,240px);}
+  .stage.multi{grid-template-columns:auto minmax(0,1fr);}
+  .stage.multi .lanectl{display:flex;}
+  .lc{flex:1; min-height:0; display:grid; grid-template-columns:1fr auto auto; grid-template-rows:auto 1fr; gap:2px 6px; align-items:center;
+      padding:6px 10px; border-bottom:1px solid var(--line);}
+  .lc:last-child{border-bottom:none;}
+  .lc .nm{grid-column:1/-1; font-size:15px; display:flex; gap:8px; align-items:baseline; min-width:0;}
+  .lc .nm b{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;} .lc .nm i{font-style:normal; color:var(--muted); font-size:13px; white-space:nowrap;}
+  .lc input[type=range]{width:100%; min-width:40px; accent-color:var(--gold);}
+  .lc button{background:var(--panel2); border:1px solid var(--line); border-radius:8px; min-width:44px; min-height:36px; cursor:pointer; color:var(--muted);}
+  .lc button.on{border-color:var(--gold); color:var(--gold);}
+  .scoreStrip{flex:1; min-height:0; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 14px; overflow-y:auto; position:relative;
+              display:flex; flex-wrap:wrap; align-content:flex-start; gap:2px 0; font-family:Consolas,"Noto Sans Mono",monospace;}
+  .stagecol.multi .scoreStrip{display:none;}
   /* 一顆音一個 span：八度點用 ::before／::after 畫（attr 取內容），不多開節點 */
-  .jn{position:relative; display:inline-block; min-width:1.15em; text-align:center;
-      font-size:19px; color:var(--text); padding:6px 3px; transition:color .08s;}
-  .jn::before{content:attr(data-up); position:absolute; top:-5px; left:0; right:0;
-              font-size:11px; line-height:1; color:inherit; opacity:.75;}
-  .jn::after{content:attr(data-dn); position:absolute; bottom:-4px; left:0; right:0;
-             font-size:11px; line-height:1; color:inherit; opacity:.75;}
+  .jn{position:relative; display:inline-block; min-width:1.15em; text-align:center; font-size:clamp(22px,1.9vw,38px); color:var(--text); padding:10px 4px; transition:color .08s;}
+  .jn::before{content:attr(data-up); position:absolute; top:-3px; left:0; right:0; font-size:12px; line-height:1; color:inherit; opacity:.75;}
+  .jn::after{content:attr(data-dn); position:absolute; bottom:-2px; left:0; right:0; font-size:12px; line-height:1; color:inherit; opacity:.75;}
   .jn.short{text-decoration:underline; text-underline-offset:5px;}
   .jn.rest{color:var(--muted);}
-  .jn.on{color:var(--gold); font-weight:700; text-shadow:0 0 12px rgba(212,169,74,.6);}
+  .jn.on{color:var(--gold); font-weight:700; text-shadow:0 0 12px color-mix(in srgb,var(--gold) 60%,transparent);}
   .jn.done{color:var(--muted); opacity:.55;}
   .jn.low{color:#c98a8a;}   /* 低八度以下自己變色——「太低」用看的就找得到 */
 
-  /* 多聲部配樂（v1.15.00）：每軌一列——名稱、音色、音量、M／S */
-  .orch{width:var(--colW); margin-top:40px; border-top:1px solid var(--line); padding-top:24px;}
-  .orch h2{font-size:18px; color:var(--gold); letter-spacing:1px; margin-bottom:12px;}
-  .orchHead{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px;}
-  .orchHead select,.orchHead button,.trk button{background:var(--panel); color:var(--text); border:1px solid var(--line);
-          border-radius:999px; padding:7px 16px; font-size:14px; cursor:pointer; font-family:inherit;}
-  #orchPlay{border-color:var(--gold); color:var(--gold); margin-left:auto;}
-  .trk{display:grid; grid-template-columns:minmax(90px,1fr) 70px 2fr 40px 40px; gap:10px; align-items:center;
-       background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:8px;}
-  .trk .tv{color:var(--muted); font-size:13px;}
-  .trk button{padding:6px 0; border-radius:8px;}
-  .trk button.on{border-color:var(--gold); color:var(--gold);}
-  .trk input{width:100%;}
-  @media (max-width:640px){ .trk{grid-template-columns:1fr 1fr 40px 40px;} .trk input{grid-column:1/-1; order:9;} }
-  /* 2K（≥1800px）：不准手機骨架搬上桌機——欄寬放到 1640、字級照 2K 通則（內文 18、標題 32）、
-     曲目卡一排 5 張、音色鈕一排 9 顆（2026-10-16 Master：「2K 版的版面不要再加寬？」） */
-  @media (min-width:1800px) and (min-height:1200px){
-    body{padding-top:48px;}
-    h1{font-size:40px;} .sub{font-size:18px;}
-    .voices{grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:10px;}
-    .voices button{font-size:18px; min-height:52px;}
-    .vsep,.hint{font-size:16px;}
-    .now{font-size:18px; height:40px;} .now button{font-size:16px; padding:6px 18px;}
-    .scoreHead>span:first-child{font-size:16px;} .scoreHead .hint{font-size:14px;} .modeBtn{font-size:14px;}
-    #roll{height:200px;}
-    .tunes{grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px;}
-    .tune{padding:18px 20px;} .tune .name{font-size:22px;} .tune .orig{font-size:15px;} .tune .meta{font-size:15px;}
-    .orch h2{font-size:24px;}
-  }
-  /* 分頁：曲庫／簡譜即興台／多聲部一次只顯示一個（Master 2026-10-16：「版面如果有空間，就盡量不要出現需要拉動的卷軸」） */
-  .tabs{display:flex; gap:8px; width:var(--colW); margin:4px 0 12px;}
-  .tabs button{background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:10px; padding:8px 18px; font-size:15px; cursor:pointer; font-family:inherit;}
-  .tabs button.on{border-color:var(--gold); color:var(--gold);}
-  .tabLink{border:1px solid var(--gold); color:var(--gold); border-radius:10px; padding:8px 18px; font-size:15px; text-decoration:none;}
-  /* 多聲部分頁：每軌自帶樂器，左欄的音色選擇用不到——收起來免得誤會 */
-  body.tab-orch #voices, body.tab-orch .left > .hint, body.tab-orch #mixToggle, body.tab-orch #accToggle{display:none;}
-  .panel[hidden]{display:none !important;}
-  .panel h2{display:none;}            /* 分頁鈕已經寫了名字，不重複 */
-  .orch.panel{margin-top:0; border-top:none; padding-top:0;}
-  .top{display:flex; flex-direction:column; align-items:center;}
-  .app,.left,.right{display:contents;}  /* 窄螢幕：照舊一條直欄往下排 */
-  .sub{display:none;}   /* 副標是自我介紹，曲庫本身就說明了——剃掉 */
-  /* 桌機（≥1100px）：三欄一屏不捲動——左＝曲庫、中＝舞台（簡譜捲簾吃滿）、右＝音色；放不下的只在欄內部捲 */
-  @media (min-width:1100px){
-    :root{ --colW:100%; }
-    body{height:100vh; overflow:hidden; padding:14px 28px 28px; align-items:stretch;}
-    .top{justify-content:center; margin-bottom:12px; flex:none;}
-    .top a{margin:0 !important;}
-    .app{display:grid; grid-template-columns:minmax(380px,27%) 1fr minmax(300px,22%); grid-template-rows:auto minmax(0,1fr) auto;
-         gap:14px 28px; flex:1; min-height:0; width:100%; max-width:2400px; margin:0 auto;}
-    .left,.right{display:contents;}
-    .tabs{grid-area:1/1; margin:0; width:100%;}
-    .panel{grid-area:2/1/4/2; min-height:0; overflow:auto; padding-right:6px;}
-    .tunes{grid-template-columns:1fr; align-content:start; gap:10px;}
-    .score{grid-area:1/2/3/3; display:flex; flex-direction:column; min-height:0; margin:0;}
-    #roll{flex:1; height:auto; min-height:0; border-radius:16px;}
-    .scoreStrip{flex:1; height:auto; border-radius:16px; display:flex; align-items:center;}
-    .now{grid-area:3/2; margin:0; flex-wrap:wrap; height:auto; gap:10px;}
-    .voices{grid-area:1/3/3/4; grid-template-columns:repeat(2,1fr); align-content:start; overflow:auto; margin:0; min-height:0;}
-    .left>.hint{grid-area:3/3; margin:0;}
-    body.tab-orch .panel{grid-area:2/1/4/3;}
-    body.tab-orch .score{grid-area:1/3/3/4;}
-    body.tab-orch .now{grid-area:3/3;} body.tab-orch .scoreHead .hint{display:none;}
-    .credits{position:fixed; right:16px; bottom:6px; margin:0;}
-  }
-  @media (min-width:1800px) and (min-height:1200px){
-    .tunes{grid-template-columns:repeat(2,1fr);}
-    .app{grid-template-columns:minmax(560px,30%) 1fr minmax(420px,20%);}
-    .tabs button,.tabLink{font-size:18px; padding:10px 22px;}
-    .now button{min-height:44px;}
-  }
-  /* 手機：舞台在最上、音色單排橫滑、曲庫在內部捲——第一眼就是「點一首曲子」 */
+  /* 控制列：播放／模式／音色／靜音／混音師面板把手 */
+  .ctl{display:flex; gap:10px; align-items:center; flex-wrap:wrap; position:relative; flex:none;}
+  .ctl button{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:0 16px; min-height:44px; cursor:pointer; font-size:16px; color:var(--text);}
+  .ctl button:hover{border-color:var(--blue);}
+  .ctl .big{background:var(--gold); border-color:var(--gold); color:#1a1405; font-weight:700; padding:0 28px; min-width:96px;}
+  .ctl #muteBtn.off{color:var(--gold); border-color:var(--gold);}
+  .ctl.orch #voiceBtn{display:none;} .ctl #editBtn{display:none;} .ctl.orch #editBtn{display:inline-flex; align-items:center;}
+  .ctl #dp-handle{margin-left:auto;}
+  #voicePop{position:absolute; left:0; bottom:calc(100% + 8px); z-index:30; width:min(620px,94vw); max-height:min(60vh,520px); overflow:auto;
+            background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; box-shadow:0 8px 30px rgba(0,0,0,.5);}
+  #voicePop[hidden]{display:none;}
+  .voices{display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px;}
+  .voices button{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:0 4px; font-size:15px; cursor:pointer; white-space:nowrap; min-height:44px;}
+  .voices button.active{border-color:var(--gold); color:var(--gold);}
+  .vsep{grid-column:1/-1; color:var(--muted); font-size:13px; margin-top:6px;} .vsep:first-child{margin-top:0;}
+  .popfoot{display:flex; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line);}
+  .popfoot button{background:var(--panel2); border:1px solid var(--line); border-radius:10px; min-height:44px; padding:0 16px; cursor:pointer; color:var(--text);}
+  .popfoot button.mixOn{border-color:var(--blue); color:var(--blue);}
+
+  /* 曲庫側欄：舞台在左、清單在右，內部捲動 */
+  .side{display:flex; flex-direction:column; gap:10px; min-height:0; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; overflow:auto;}
+  .sec{color:var(--muted); font-size:14px; margin:6px 2px 0; letter-spacing:1px;} .sec:first-child{margin-top:0;}
+  .tune{background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:10px 14px; cursor:pointer; text-align:left; color:var(--text);
+        display:flex; flex-direction:column; gap:2px; font-family:inherit; flex:none;}
+  .tune:hover{border-color:var(--blue);}
+  .tune.sel{border-color:color-mix(in srgb,var(--gold) 55%,var(--line));}
+  .tune.playing{border-color:var(--gold); background:var(--sel);}
+  .tune .name{font-size:18px;} .tune.playing .name{color:var(--gold);}
+  .tune .meta{font-size:14px; color:var(--muted);}
+  .chips{display:flex; gap:6px; margin-top:6px;}
+  .chip{font-size:13px; padding:4px 14px; min-height:32px; border:1px solid var(--line); border-radius:999px; background:none; color:var(--blue); cursor:pointer; font-family:inherit;}
+  .chip:hover{border-color:var(--gold); color:var(--gold);} .chip.playing{border-color:var(--gold); color:var(--gold); background:var(--sel);}
+  .credits{position:fixed; right:16px; bottom:4px; font-size:12px;} .credits a{color:var(--muted);}
+
+  /* 手機：舞台在最上、播放列、曲庫內部捲——第一眼就是「點一首曲子」 */
   @media (max-width:1099px){
-    body{height:100dvh; min-height:0; overflow:hidden; padding:10px 12px 0; align-items:stretch;}
-    .top{flex:none; margin-bottom:6px;} h1{font-size:20px;}
-    .score{order:1; flex:none; margin-bottom:6px;}
-    #roll{height:112px;}
-    .scoreStrip{height:112px;}
-    .now{order:2; flex:none; height:auto; margin-bottom:6px; gap:8px; overflow-x:auto; white-space:nowrap; scrollbar-width:none;}
-    .now button{white-space:nowrap; flex:none; min-height:44px;}
-    .voices{order:3; flex:none; display:flex; width:100%; overflow-x:auto; gap:6px; margin-bottom:8px; scrollbar-width:none;}
-    .voices button{flex:none; padding:0 14px; min-height:44px;}
-    .vsep,.left>.hint,.scoreHead .hint{display:none;}
-    .tabs{order:4; width:100%; flex:none; margin:0 0 8px;}
-    .tabs button,.tabLink{min-height:44px; padding:0 16px;}
-    .panel{order:5; flex:1; min-height:0; overflow:auto; width:100%; padding-bottom:12px;}
-    .tunes{grid-template-columns:1fr; gap:8px;}
-    .tune{padding:10px 14px;} .tune .orig{display:none;}
-    .credits{order:9; position:static; margin:2px 0; font-size:10px; flex:none; text-align:center;}
+    :root{ --laneH:clamp(72px,12vh,120px); }
+    body{padding:10px 12px 0;}
+    .app{grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:8px;}
+    .stage,.stage:not(.multi){flex:0 1 calc(var(--lanes,1) * var(--laneH)); max-height:44vh;}
+    .scoreStrip{display:none;}
+    .nowname{font-size:19px;} .noworig{display:none;}
+    .lanectl{width:96px;} .lc input[type=range]{display:none;} .lc{grid-template-columns:1fr auto auto; padding:4px 6px;} .lc .nm i{display:none;}
+    .ctl .big{min-width:64px; padding:0 18px;}
+    .credits{position:static; text-align:center; font-size:10px; padding:2px 0;}
+    .lc button{min-width:36px; min-height:40px;}
+    #voicePop{position:fixed; left:8px; right:8px; bottom:8px; top:auto; width:auto; max-height:70dvh;}   /* 手機：音色選單做成貼底的面板，不管播放列在哪都看得到 */
+  }
+  @media (min-width:1800px) and (min-height:1200px){
+    .nowname{font-size:30px;} .tune .name{font-size:22px;} .tune .meta{font-size:16px;} .jn{font-size:26px;}
+    .ctl button{font-size:18px;}
   }
 </style>
 </head>
 <body>
-  <header class="top">
-  <h1 data-t="app.title"></h1>
-  <div class="sub" data-t="app.subtitle"></div>
-  </header>
+  <header class="mtop"><h1 data-t="app.title"></h1><span id="mnav" data-page="listen"></span></header>
 
-  <div class="app">
-  <aside class="left">
-
-  <div class="voices" id="voices"></div>
-  <div class="hint" data-t="ui.hint"></div>
-
-  <div class="now">
-    <button id="modeBtn"></button>
-    <span id="nowLabel"></span>
-    <button id="stopBtn" data-t="ui.stop" style="display:none"></button>
-    <button id="muteBtn" title="靜音"></button>
-  </div>
-  </aside>
-
-  <main class="right">
-
-  <!-- 簡譜條（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）——也是「音太低」的診斷儀 -->
-  <section class="score">
-    <div class="scoreHead"><span data-t="score.title"></span><span class="hint" id="scoreHint"></span><button id="scoreMode" class="modeBtn"></button></div>
-    <canvas id="roll"></canvas>
-    <div class="scoreStrip" id="scoreStrip"></div>
-  </section>
-
-  <nav class="tabs">
-    <button data-p="tunes" data-t="tab.tunes"></button><button data-p="orch" data-t="orch.title"></button><a class="tabLink" href="composer.html" data-t="tab.create"></a><a class="tabLink" href="formula.html" data-t="tab.formula"></a>
-  </nav>
-  <div class="tunes panel" data-p="tunes" id="tunes"></div>
-
-  <!-- 簡譜即興台（v1.10.00，Roy：「3.1415926，圓周率當樂譜！我想要輸入簡譜就能發音」） -->
-
-  <!-- 多聲部配樂（v1.15.00，Master 的史詩配樂）：曲庫在 config.js 的 ORCH_TUNES -->
-  <section class="orch panel" data-p="orch">
-    <h2 data-t="orch.title"></h2>
-    <div class="orchHead">
-      <select id="orchSel"></select>
-      <button id="orchEdit" data-t="orch.edit"></button>
-      <button id="orchStop" data-t="ui.stop"></button>
-      <button id="orchPlay" data-t="orch.play"></button>
-    </div>
-    <div id="trks"></div>
-    <div class="hint" data-t="orch.hint"></div>
-  </section>
-
-  </main>
+  <div class="app" id="app">
+    <main class="stagecol" id="stagecol">
+      <div class="nowrow"><span class="nowname" id="nowName"></span><span class="noworig" id="nowOrig"></span></div>
+      <section class="stage" id="stage">
+        <div class="lanectl" id="lanectl"></div>
+        <canvas id="roll"></canvas>
+      </section>
+      <div class="scoreStrip" id="scoreStrip"></div>
+      <div class="ctl" id="ctl">
+        <button id="playBtn" class="big">▶</button>
+        <button id="modeBtn"></button>
+        <button id="voiceBtn"></button>
+        <button id="editBtn" data-t="orch.edit"></button>
+        <button id="muteBtn" title="靜音"></button>
+        <div id="voicePop" hidden>
+          <div class="voices" id="voices"></div>
+          <div class="popfoot" id="popfoot"></div>
+        </div>
+      </div>
+    </main>
+    <aside class="side" id="tunes"></aside>
   </div>
 
   <footer class="credits"><a href="https://versilian-studios.com/vsco-community/" target="_blank" rel="noopener" data-t="credits.samples"></a></footer>
 
-<script src="config.js?v=1.25.05"></script>
-<script src="strings.zh.js?v=1.25.05"></script>
-<script src="musician.js?v=1.25.05"></script>
-<script src="designer-panel.js?v=1.25.05"></script>
+<script src="config.js?v=1.26.00"></script>
+<script src="strings.zh.js?v=1.26.00"></script>
+<script src="musician.js?v=1.26.00"></script>
+<script src="designer-panel.js?v=1.26.00"></script>
 <script>
 applyText(CONFIG); applyStaticText();
-const JIANPU_IDX=-2;   // 簡譜即興台的虛擬曲目索引（不在 TUNES 裡）
+const $=id=>document.getElementById(id);
+const stageEl=$('stage'), stagecol=$('stagecol'), ctl=$('ctl'), tunesEl=$('tunes');
 
 /* 音色雙模式（v1.09.00，Roy：「允許玩家完全不選。也許在音色右邊做個切換開關？」）：
    指揮關（預設）＝單選——點哪個換哪個，快速比音色；
-   指揮開＝自由編制（同旋律 doubling），可以全部關掉＝靜場（指揮的休止手勢XD）。
-   播放中改編制立刻生效。「指揮／混音師」職稱由 Roy 正名 2026-09-16 */
-let activeVoices=new Set(['piano']), playingIdx=-1, mixMode=false;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
+   指揮開＝自由編制（同旋律 doubling），可以全部關掉＝靜場。播放中改編制立刻生效。 */
+let activeVoices=new Set(['piano']), mixMode=false;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
+let sel=null, playingNow=false;                        // sel＝{k:'t'|'o', i}：選中的曲；playingNow＝正在播
 
 Musician.setSamples(SAMPLES,'samples/vsco/');   // 真樂器取樣：註冊成音色，第一次用到才下載
-const voicesEl=document.getElementById('voices');
-let realSep=false;
-{ const d=document.createElement('div'); d.className='vsep'; d.textContent=TEXT['ui.synthGroup']; voicesEl.appendChild(d); }
-Musician.voices.forEach(v=>{
-  if(Musician.isSampled(v)&&!realSep){ realSep=true; const d=document.createElement('div'); d.className='vsep'; d.textContent=TEXT['ui.realGroup']; voicesEl.appendChild(d); }
-  const b=document.createElement('button');
-  b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
-  if(activeVoices.has(v))b.classList.add('active');
-  b.onclick=()=>{
-    if(mixMode){ activeVoices.has(v)?activeVoices.delete(v):activeVoices.add(v); }
-    else activeVoices=new Set([v]);
-    paintVoices();
-    if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx);
-  };
-  voicesEl.appendChild(b);
-});
-const mixBtn=document.createElement('button');
-mixBtn.id='mixToggle'; mixBtn.textContent=TEXT['ui.mix'];
+const voicesEl=$('voices');
+{ let realSep=false;
+  const sep=t=>{ const d=document.createElement('div'); d.className='vsep'; d.textContent=t; voicesEl.appendChild(d); };
+  sep(TEXT['ui.synthGroup']);
+  Musician.voices.forEach(v=>{
+    if(Musician.isSampled(v)&&!realSep){ realSep=true; sep(TEXT['ui.realGroup']); }
+    const b=document.createElement('button');
+    b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
+    b.onclick=()=>{
+      if(mixMode){ activeVoices.has(v)?activeVoices.delete(v):activeVoices.add(v); }
+      else { activeVoices=new Set([v]); $('voicePop').hidden=true; }
+      paintVoices(); if(playingNow&&sel.k==='t') playSel();
+    };
+    voicesEl.appendChild(b);
+  }); }
+const mixBtn=document.createElement('button'); mixBtn.id='mixToggle'; mixBtn.textContent=TEXT['ui.mix'];
 mixBtn.onclick=()=>{
   mixMode=!mixMode;
   if(!mixMode && activeVoices.size!==1)   // 收回單選：留最左邊亮著的那顆；全暗就回預設鋼琴
     activeVoices=new Set([Musician.voices.find(v=>activeVoices.has(v))||'piano']);
-  paintVoices();
-  if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx);
+  paintVoices(); if(playingNow&&sel.k==='t') playSel();
 };
-document.querySelector('.now').prepend(mixBtn);
 /* 伴奏開關（v1.23.00）：有伴奏軌的曲子，旋律照選的音色、伴奏固定樂器；關掉回到單旋律（辨認遊戲的原味） */
 let accOn=true; try{ accOn=localStorage.getItem('musician.acc')!=='0'; }catch(e){}
 const accBtn=document.createElement('button'); accBtn.id='accToggle';
 const paintAcc=()=>{ accBtn.textContent=TEXT[accOn?'ui.accOn':'ui.accOff']; accBtn.classList.toggle('mixOn',accOn); };
-accBtn.onclick=()=>{ accOn=!accOn; paintAcc(); try{ localStorage.setItem('musician.acc',accOn?'1':'0'); }catch(e){}
-  if(playingIdx>=0) playTune(playingIdx); };
-paintAcc(); mixBtn.after(accBtn);   // 指揮開關跟播放模式放同一列（它是「怎麼播」不是「哪種音色」）
+accBtn.onclick=()=>{ accOn=!accOn; paintAcc(); try{ localStorage.setItem('musician.acc',accOn?'1':'0'); }catch(e){} if(playingNow&&sel.k==='t') playSel(); };
+$('popfoot').append(mixBtn,accBtn); paintAcc();
 function paintVoices(){
   voicesEl.querySelectorAll('button').forEach(x=>x.classList.toggle('active',activeVoices.has(x.dataset.v)));
-  mixBtn.classList.toggle('mixOn',mixMode);   // 指揮鈕已搬到播放列，不在 voicesEl 裡（2026-10-17 Master 抓到「指揮按鍵不亮」）
+  mixBtn.classList.toggle('mixOn',mixMode);
+  const n=activeVoices.size, v=[...activeVoices][0];
+  $('voiceBtn').textContent='♪ '+(n===0?'靜場':n===1?TEXT['ui.voice.'+v]:n+' 種音色')+' ▾';
 }
 paintVoices();
+$('voiceBtn').onclick=e=>{ e.stopPropagation(); $('voicePop').hidden=!$('voicePop').hidden; };
+document.addEventListener('click',e=>{ if(!$('voicePop').hidden&&!$('voicePop').contains(e.target)) $('voicePop').hidden=true; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('voicePop').hidden=true; });
 
-const tunesEl=document.getElementById('tunes'),
-      nowEl=document.getElementById('nowLabel'),
-      stopBtn=document.getElementById('stopBtn');
-/* 依原文曲名字母排序（Roy 定案 2026-09-15）。康康舞的原名刻意寫成
-   「Orphée aux enfers: Ouverture — Galop infernal」——與序曲同前綴、字串較長，
-   排序天然落在序曲正後方，不需要特例；名字本身就說明了它是序曲的壓軸段。
-   帶 parent 的曲目（Roy 定案：「變奏版這種按鈕跟著原曲」）不佔卡位，
-   變成掛在原曲卡下緣的小膠囊鍵——卡片點了播原版，膠囊點了播變奏 */
-const CARD_BY_TUNE={};   // TUNES index → 它顯示在哪張卡（變奏映到原曲卡）
-TUNES.map((tu,i)=>({tu,i}))
-  .filter(x=>!x.tu.parent)
+/* ── 曲庫側欄：古典名曲（TUNES）與多聲部配樂（ORCH_TUNES）同一份清單，分兩節 ──
+   依原文曲名字母排序（Roy 定案 2026-09-15）；帶 parent 的變奏掛在原曲卡下緣當膠囊（Roy：「變奏版這種按鈕跟著原曲」） */
+const CARD={};   // 'tN'／'oN' → 卡片節點（變奏映到原曲卡）
+const secHead=t=>{ const d=document.createElement('div'); d.className='sec'; d.textContent=t; tunesEl.appendChild(d); };
+function addCard(key,name,meta,onclick){
+  const b=document.createElement('div'); b.className='tune'; b.dataset.k=key; CARD[key]=b;
+  b.innerHTML='<span class="name">'+name+'</span><span class="meta">'+meta+'</span>';
+  b.setAttribute('role','button'); b.tabIndex=0; b.onclick=onclick;
+  b.onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===b){ e.preventDefault(); onclick(); } };
+  tunesEl.appendChild(b); return b;
+}
+secHead('古典名曲');
+TUNES.map((tu,i)=>({tu,i})).filter(x=>!x.tu.parent)
   .sort((a,b)=>(a.tu.orig||a.tu.name).localeCompare(b.tu.orig||b.tu.name))
   .forEach(({tu,i})=>{
-  const beats=tu.notes.reduce((s,n)=>s+n[1],0);
-  const b=document.createElement('div');
-  b.className='tune'; b.dataset.i=i; CARD_BY_TUNE[i]=b;
-  b.innerHTML='<span class="name">'+tu.name+'</span>'+
-              (tu.orig?'<span class="orig">'+tu.orig+'</span>':'')+
-              '<span class="meta">'+tu.composer+'　'+TEXT['ui.beats'](beats)+(tu.accomp?'　'+TEXT['ui.hasAcc']:'')+'</span>';
-  b.setAttribute('role','button'); b.tabIndex=0; b.onclick=()=>playTune(i);
-  b.onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===b){ e.preventDefault(); playTune(i); } };
-  const kids=TUNES.map((t2,j)=>({t2,j})).filter(x=>x.t2.parent===tu.id);
-  if(kids.length){
-    const row=document.createElement('div'); row.className='chips';
-    kids.forEach(({t2,j})=>{
-      CARD_BY_TUNE[j]=b;
-      const c=document.createElement('button'); c.className='chip'; c.textContent=t2.label||t2.name;
-      c.dataset.j=j;
-      c.onclick=e=>{e.stopPropagation(); playTune(j);};   // 卡片本體是原版，膠囊是變奏
-      row.appendChild(c);
-    });
-    b.appendChild(row);
-  }
-  tunesEl.appendChild(b);
-});
+    const beats=tu.notes.reduce((s,n)=>s+n[1],0);
+    const b=addCard('t'+i,tu.name,tu.composer+'　'+TEXT['ui.beats'](beats)+(tu.accomp?'　'+TEXT['ui.hasAcc']:''),()=>pick('t',i,true));
+    const kids=TUNES.map((t2,j)=>({t2,j})).filter(x=>x.t2.parent===tu.id);
+    if(kids.length){
+      const row=document.createElement('div'); row.className='chips';
+      kids.forEach(({t2,j})=>{
+        CARD['t'+j]=b;
+        const c=document.createElement('button'); c.className='chip'; c.textContent=t2.label||t2.name; c.dataset.j=j;
+        c.onclick=e=>{ e.stopPropagation(); pick('t',j,true); };   // 卡片本體是原版，膠囊是變奏
+        row.appendChild(c);
+      });
+      b.appendChild(row);
+    }
+  });
+secHead('多聲部配樂');
+ORCH_TUNES.forEach((t,i)=>addCard('o'+i,t.name,'多聲部　'+t.parts.length+' 軌',()=>pick('o',i,true)));
 
-/* ── 簡譜條（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）──────────
-   renderScore() 把 tune 轉成一排 span（一顆音一個節點，八度點走 CSS ::before/::after
-   的 attr()，2600 音的小夜曲也只有 2600 個節點）；tickScore() 每幀問引擎播到第幾秒，
-   只動「上一顆」與「這一顆」兩個 class，不重畫整條。
-   低八度以下的音自己染紅——Roy：「有些音色似乎太低」，這樣就看得到是哪幾顆 */
-const stripEl=document.getElementById('scoreStrip'), scoreHintEl=document.getElementById('scoreHint');
-let scoreTokens=[], scoreNodes=[], scoreOn=-1, scoreRAF=0;
-function clearScore(msg){
+const tuneOf=s=>s.k==='t'?TUNES[s.i]:ORCH_TUNES[s.i];
+
+/* ── 舞台：每軌一條捲簾（寬扁）；單旋律下面接簡譜全文 ──────────────
+   lanes＝[{name,tokens,color}]；畫布像素尺寸由 ResizeObserver 追著 CSS 尺寸走
+   （舊版只在「正在畫」時才對齊，沒播放時換分頁／縮放就被 CSS 拉伸，文字變形——2026-11-02 Master 抓到） */
+const stripEl=$('scoreStrip'), rollEl=$('roll'), rctx=rollEl.getContext('2d');
+let lanes=[], scoreTokens=[], scoreNodes=[], scoreOn=-1, scoreRAF=0;
+const pal={}; function readPal(){ const cs=getComputedStyle(document.documentElement); for(const k of ['gold','blue','muted','text','line','lane1','lane2','lane3','lane4','lane5','lane6']) pal[k]=cs.getPropertyValue('--'+k).trim(); }
+readPal(); window.addEventListener('musician-palette',()=>{ readPal(); drawRoll(Math.max(0,Musician.position())); });
+
+function clearScore(){
   cancelAnimationFrame(scoreRAF); scoreRAF=0;
-  scoreTokens=[]; scoreNodes=[]; scoreOn=-1;
-  stripEl.innerHTML='<span class="empty"></span>';
-  stripEl.firstChild.textContent=msg||TEXT['score.empty'];
-  scoreHintEl.textContent='';
+  lanes=[]; scoreTokens=[]; scoreNodes=[]; scoreOn=-1; stripEl.innerHTML='';
+  stageEl.style.setProperty('--lanes',1); stageEl.classList.remove('multi'); stagecol.classList.remove('multi'); $('lanectl').innerHTML='';
   drawRoll(0);
 }
 function renderScore(tune){
   const jp=Musician.toJianpu(tune,{floorMidi:CONFIG.play.floorMidi});
+  lanes=[{name:tune.name,tokens:jp.tokens,color:null}];
   scoreTokens=jp.tokens; scoreOn=-1;
-  const frag=document.createDocumentFragment();
-  const dots=n=>'˙'.repeat(Math.min(Math.abs(n),3));
+  stageEl.style.setProperty('--lanes',1); stageEl.classList.remove('multi'); stagecol.classList.remove('multi'); $('lanectl').innerHTML='';
+  const frag=document.createDocumentFragment(), dots=n=>'˙'.repeat(Math.min(Math.abs(n),3));
   for(const t of jp.tokens){
     const el=document.createElement('span');
     el.className='jn'+(t.d==='0'?' rest':'')+(t.beats<1?' short':'')+(t.oct<0?' low':'');
     if(t.oct>0) el.dataset.up=dots(t.oct);
     if(t.oct<0) el.dataset.dn=dots(t.oct);
-    // 兩拍以上補簡譜的延長線（最多三根，長音不佔滿整條）
-    el.textContent=t.acc+t.d+(t.beats>=2?' –'.repeat(Math.min(Math.round(t.beats)-1,3)):'');
+    el.textContent=t.acc+t.d+(t.beats>=2?' –'.repeat(Math.min(Math.round(t.beats)-1,3)):'');   // 兩拍以上補延長線
     frag.appendChild(el);
   }
-  stripEl.innerHTML=''; stripEl.appendChild(frag);
-  scoreNodes=[...stripEl.children];
-  stripEl.scrollLeft=0;
-  const lows=jp.tokens.filter(t=>t.d!=='0'&&t.oct<0).length;
-  scoreHintEl.textContent=TEXT['score.hint']+(lows?'　｜　這首有 '+lows+' 顆低八度音（紅色）':'');
-  if(!scoreRAF) scoreRAF=requestAnimationFrame(tickScore);
+  stripEl.innerHTML=''; stripEl.appendChild(frag); scoreNodes=[...stripEl.children]; stripEl.scrollTop=0;
+  drawRoll(0);
 }
-
-/* ── 長條圖模式（Roy：「簡譜有沒有可能用長條圖顯示音高，然後會隨著音樂明滅？」）──
-   橫軸＝時間（固定視窗 8 秒，播放線在左 1/4 處、畫面往左流），縱軸＝音高，一顆音一條長條；
-   還沒到的＝藍、正在響的＝金色發光、剛響完＝金色淡出、已過＝暗。與簡譜條共用同一份 tokens／同一個 rAF。 */
-const rollEl=document.getElementById('roll'), rctx=rollEl.getContext('2d');
-let rollMode=true; try{ rollMode=localStorage.getItem('musician.scoreMode')!=='jp'; }catch(e){}
-const scoreModeBtn=document.getElementById('scoreMode');
-function applyMode(){
-  rollEl.style.display=rollMode?'block':'none'; stripEl.style.display=rollMode?'none':'block';
-  scoreModeBtn.textContent=rollMode?'改看簡譜':'改看長條圖';
-  try{ localStorage.setItem('musician.scoreMode',rollMode?'bar':'jp'); }catch(e){}
-  drawRoll(Math.max(0,Musician.position()));
+/* 多聲部：每一軌各算一份 tokens（offset 補休止、rep 重複），一軌一條捲簾；左邊是這一軌的音量／M／S */
+function renderOrch(tune){
+  const box=$('lanectl'); box.innerHTML=''; stripEl.innerHTML=''; scoreTokens=[]; scoreNodes=[]; scoreOn=-1;
+  lanes=tune.parts.map((p,i)=>{
+    const src=p.notes||Musician.fromJianpu(p.jp||'').notes, arr=[];
+    if(p.offset) arr.push([null,p.offset]);
+    for(let r=0;r<(p.rep||1);r++) for(const n of src) arr.push(n);
+    const jp=Musician.toJianpu({bpm:tune.bpm,notes:arr},{floorMidi:0});
+    const color=pal['lane'+(i%6+1)];
+    const r=document.createElement('div'); r.className='lc'; const vol=p.vol==null?1:p.vol;
+    r.innerHTML='<span class="nm"><b style="color:'+color+'">'+p.name+'</b><i>'+TEXT['ui.voice.'+p.voice]+'</i></span>'+
+      '<input type="range" min="0" max="1" step="0.05" value="'+vol+'"><button data-k="mute" class="'+(p.mute?'on':'')+'">M</button><button data-k="solo" class="'+(p.solo?'on':'')+'">S</button>';
+    r.querySelector('input').oninput=e=>{ p.vol=+e.target.value; Musician.setPart(i,{vol:p.vol}); };
+    r.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      p[b.dataset.k]=!p[b.dataset.k]; b.classList.toggle('on',p[b.dataset.k]);
+      Musician.setPart(i,{[b.dataset.k]:p[b.dataset.k]});
+      if(b.dataset.k==='solo') tune.parts.forEach((q,j)=>Musician.setPart(j,{solo:q.solo}));
+    });
+    box.appendChild(r);
+    return {name:p.name,tokens:jp.tokens,color};
+  });
+  stageEl.style.setProperty('--lanes',lanes.length); stageEl.classList.add('multi'); stagecol.classList.add('multi');
+  drawRoll(0);
 }
-scoreModeBtn.onclick=()=>{ rollMode=!rollMode; applyMode(); if(!scoreRAF&&scoreTokens.length&&Musician.position()>=0) scoreRAF=requestAnimationFrame(tickScore); };
+/* 長條圖：橫軸＝時間（固定視窗 8 秒，播放線在左 1/4 處、畫面往左流），縱軸＝音高，一顆音一條。
+   單旋律：還沒到＝藍、正在響＝金色發光、剛響完＝淡出、已過＝暗；多軌：用該軌自己的顏色 */
 function drawRoll(pos){
-  if(!rollMode) return;
   const dpr=window.devicePixelRatio||1, W=rollEl.clientWidth, H=rollEl.clientHeight;
+  if(!W||!H) return;
   if(rollEl.width!==Math.round(W*dpr)||rollEl.height!==Math.round(H*dpr)){ rollEl.width=Math.round(W*dpr); rollEl.height=Math.round(H*dpr); }
-  rctx.setTransform(dpr,0,0,dpr,0,0); rctx.clearRect(0,0,W,H);
-  const toks=scoreTokens;
-  if(!toks.length){ rctx.fillStyle='#8a8fa8'; rctx.font=Math.max(15,Math.round(H/28))+'px "Noto Sans TC",sans-serif'; rctx.textAlign='center';
-    rctx.fillText(TEXT['score.empty'],W/2,H/2+5); rctx.textAlign='left'; return; }
-  let lo=1e9, hi=-1e9; for(const t of toks) if(t.midi!=null){ if(t.midi<lo)lo=t.midi; if(t.midi>hi)hi=t.midi; }
-  if(lo>hi) return;
-  const WIN=8, pps=W/WIN, x0=W*0.25, padY=10, rows=hi-lo+1, rh=Math.max(3,(H-2*padY)/rows);
-  // 找第一顆還看得到的音（tokens 依 sec 排序）
-  let a=0,b=toks.length; while(a<b){ const m=(a+b)>>1; if(toks[m].sec+toks[m].dur<pos-0.6) a=m+1; else b=m; }
-  for(let i=a;i<toks.length;i++){
-    const t=toks[i], x=x0+(t.sec-pos)*pps; if(x>W) break;
-    if(t.midi==null) continue;
-    const w=Math.max(3,t.dur*pps-2), y=H-padY-(t.midi-lo+1)*rh+1, end=t.sec+t.dur;
-    if(pos>=t.sec && pos<end){ rctx.fillStyle='#ffd77a'; rctx.shadowColor='rgba(255,200,80,.9)'; rctx.shadowBlur=14; }
-    else if(pos>=end){ const f=Math.max(0,1-(pos-end)/0.5);          // 剛響完：0.5 秒淡出
-      rctx.shadowBlur=f>0?10*f:0; rctx.shadowColor='rgba(255,200,80,.7)';
-      rctx.fillStyle=f>0?`rgba(212,169,74,${0.25+0.6*f})`:'rgba(138,143,168,.28)'; }
-    else { rctx.shadowBlur=0; rctx.fillStyle='rgba(126,167,216,.7)'; }
-    rctx.fillRect(x,y,w,Math.max(2,rh-2));
-  }
-  rctx.shadowBlur=0; rctx.fillStyle='rgba(232,228,216,.5)'; rctx.fillRect(x0-1,0,2,H);   // 播放線
+  rctx.setTransform(dpr,0,0,dpr,0,0); rctx.clearRect(0,0,W,H); rctx.globalAlpha=1;
+  const n=lanes.length; if(!n) return;
+  const LH=H/n, WIN=8, pps=W/WIN, x0=W*0.25, multi=n>1;
+  lanes.forEach((ln,k)=>{
+    const toks=ln.tokens, y0=k*LH;
+    if(k>0){ rctx.fillStyle=pal.line; rctx.fillRect(0,y0,W,1); }
+    let lo=1e9, hi=-1e9; for(const t of toks) if(t.midi!=null){ if(t.midi<lo)lo=t.midi; if(t.midi>hi)hi=t.midi; }
+    if(lo>hi) return;
+    const padY=8, rows=hi-lo+1, rh=Math.max(3,(LH-2*padY)/rows), base=multi?ln.color:null;
+    let a=0,b=toks.length; while(a<b){ const m=(a+b)>>1; if(toks[m].sec+toks[m].dur<pos-0.6) a=m+1; else b=m; }
+    for(let i=a;i<toks.length;i++){
+      const t=toks[i], x=x0+(t.sec-pos)*pps; if(x>W) break;
+      if(t.midi==null) continue;
+      const w=Math.max(3,t.dur*pps-2), y=y0+LH-padY-(t.midi-lo+1)*rh+1, end=t.sec+t.dur;
+      if(pos>=t.sec && pos<end){ rctx.globalAlpha=1; rctx.fillStyle=base||'#ffd77a'; rctx.shadowColor=base||'rgba(255,200,80,.9)'; rctx.shadowBlur=14; }
+      else if(pos>=end){ const f=Math.max(0,1-(pos-end)/0.5);          // 剛響完：0.5 秒淡出
+        rctx.shadowBlur=f>0?10*f:0; rctx.shadowColor=base||pal.gold;
+        if(f>0){ rctx.globalAlpha=0.25+0.6*f; rctx.fillStyle=base||pal.gold; } else { rctx.globalAlpha=0.28; rctx.fillStyle=pal.muted; } }
+      else { rctx.shadowBlur=0; rctx.globalAlpha=multi?0.55:0.7; rctx.fillStyle=base||pal.blue; }
+      rctx.fillRect(x,y,w,Math.max(2,rh-2));
+    }
+    rctx.shadowBlur=0; rctx.globalAlpha=1;
+  });
+  rctx.fillStyle=pal.text; rctx.globalAlpha=0.5; rctx.fillRect(x0-1,0,2,H); rctx.globalAlpha=1;   // 播放線
 }
+new ResizeObserver(()=>drawRoll(Math.max(0,Musician.position()))).observe(rollEl);
+
 function tickScore(){
   scoreRAF=0;
   const pos=Musician.position();
   drawRoll(pos<0?0:pos);
-  if(pos<0){ if(scoreOn>=0&&scoreNodes[scoreOn]) scoreNodes[scoreOn].classList.remove('on'); scoreOn=-1; return; }
-  let i=(scoreOn>=0&&scoreTokens[scoreOn]&&pos>=scoreTokens[scoreOn].sec)?scoreOn:0;
-  while(i+1<scoreTokens.length && scoreTokens[i+1].sec<=pos) i++;   // 從上次位置往前走，不必每幀搜整首
-  if(i!==scoreOn){
-    if(scoreOn>=0&&scoreNodes[scoreOn]){ scoreNodes[scoreOn].classList.remove('on'); scoreNodes[scoreOn].classList.add('done'); }
-    const el=scoreNodes[i];
-    if(el){
-      el.classList.add('on'); el.classList.remove('done');
-      const r=el.offsetLeft-stripEl.scrollLeft;          // 快到右緣就把它拉回三分之一處
-      if(r>stripEl.clientWidth*0.75||r<0) stripEl.scrollLeft=el.offsetLeft-stripEl.clientWidth*0.33;
+  if(scoreTokens.length){
+    if(pos<0){ if(scoreOn>=0&&scoreNodes[scoreOn]) scoreNodes[scoreOn].classList.remove('on'); scoreOn=-1; }
+    else{
+      let i=(scoreOn>=0&&scoreTokens[scoreOn]&&pos>=scoreTokens[scoreOn].sec)?scoreOn:0;
+      while(i+1<scoreTokens.length && scoreTokens[i+1].sec<=pos) i++;   // 從上次位置往前走，不必每幀搜整首
+      if(i!==scoreOn){
+        if(scoreOn>=0&&scoreNodes[scoreOn]){ scoreNodes[scoreOn].classList.remove('on'); scoreNodes[scoreOn].classList.add('done'); }
+        const el=scoreNodes[i];
+        if(el){
+          el.classList.add('on'); el.classList.remove('done');
+          const r=el.offsetTop-stripEl.scrollTop;          // 目前這顆快出框就捲到三分之一處
+          if(r>stripEl.clientHeight-50||r<0) stripEl.scrollTop=Math.max(0,el.offsetTop-stripEl.clientHeight*0.33);
+        }
+        scoreOn=i;
+      }
     }
-    scoreOn=i;
   }
-  scoreRAF=requestAnimationFrame(tickScore);
+  if(pos>=0) scoreRAF=requestAnimationFrame(tickScore);
 }
-/* 分頁隱藏時瀏覽器不跑 rAF；回到前景要自己接回去（否則簡譜停在離開時那一顆） */
-document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden && scoreTokens.length && Musician.position()>=0 && !scoreRAF)
-    scoreRAF=requestAnimationFrame(tickScore);
-});
+/* 分頁隱藏時瀏覽器不跑 rAF；回到前景要自己接回去 */
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && Musician.position()>=0 && !scoreRAF) scoreRAF=requestAnimationFrame(tickScore); });
 
-function mark(i){
-  playingIdx=i;
-  /* v1.09.01 顯示歧義修正（Roy：「長笛版跳到小星星，但出來的不是小星星」——
-     隨機抽到變奏曲時亮的是母卡，看起來像在播原版）：
-     播原版＝卡片發光；播變奏＝只有那顆膠囊發光，卡片本體不亮 */
-  const isVariant=i>=0&&TUNES[i].parent;
-  const card=i>=0&&!isVariant?CARD_BY_TUNE[i]:null;
-  tunesEl.querySelectorAll('.tune').forEach(x=>x.classList.toggle('playing',x===card));
-  tunesEl.querySelectorAll('.chip').forEach(x=>x.classList.toggle('playing',isVariant&&+x.dataset.j===i));
-  nowEl.textContent=i>=0?TEXT['ui.playing'](TUNES[i].name):'';
-  stopBtn.style.display=i>=0?'':'none';
+/* ── 選曲／播放 ── */
+function pick(k,i,play){
+  sel={k,i}; try{ localStorage.setItem('musician.last',k+i); }catch(e){}
+  const tune=tuneOf(sel);
+  $('nowName').textContent=tune.name; $('nowOrig').textContent=k==='t'?(tune.orig||''):'';
+  ctl.classList.toggle('orch',k==='o');
+  if(k==='t') renderScore(tune); else renderOrch(tune);
+  paintCards();
+  if(play) playSel();
 }
-/* 播放模式（v1.09.00，Roy：「還有循環播放，單曲播放，隨機播放。嗯？這就是音樂播放器嘛。」）：
-   單曲＝播完停；循環＝同一首重來；隨機＝洗牌袋輪播全庫（含變奏，一輪不重複、不跨輪連莊——
-   Math-Racer 換曲的同一個形狀）。曲終才看模式，手點永遠直接播 */
+function playSel(){
+  if(sel.k==='t'&&!activeVoices.size){ Musician.stop(); playingNow=false; paintCards(); paintPlay(); return; }   // 全關＝靜場
+  const tune=tuneOf(sel);
+  if(sel.k==='t') Musician.play(tune,{voice:[...activeVoices],cfg:CONFIG,accomp:accOn,onend:handleEnd});
+  else Musician.play(tune,{cfg:CONFIG,onend:handleEnd});
+  playingNow=true; paintCards(); paintPlay();
+  if(!scoreRAF) scoreRAF=requestAnimationFrame(tickScore);
+}
+function stopAll(){ Musician.stop(); playingNow=false; paintCards(); paintPlay(); }
+function paintCards(){
+  const isVar=sel&&sel.k==='t'&&TUNES[sel.i].parent, card=sel?CARD[sel.k+sel.i]:null;
+  tunesEl.querySelectorAll('.tune').forEach(x=>{
+    x.classList.toggle('sel',x===card);
+    x.classList.toggle('playing',playingNow&&x===card&&!isVar);   // 播變奏＝只有膠囊發光，卡片本體不亮
+  });
+  tunesEl.querySelectorAll('.chip').forEach(x=>x.classList.toggle('playing',playingNow&&isVar&&+x.dataset.j===sel.i));
+}
+function paintPlay(){ $('playBtn').textContent=playingNow?'■':'▶'; $('playBtn').title=playingNow?'停止':'播放'; }
+$('playBtn').onclick=()=>{ if(playingNow) stopAll(); else if(sel) playSel(); };
+$('editBtn').onclick=()=>{   // 拆開來改：把這首交給積木編輯器（localStorage 傳遞）
+  try{ localStorage.setItem('composer.import', JSON.stringify(tuneOf(sel))); }catch(e){}
+  location.href='composer.html?import=1';
+};
+
+/* 播放模式（v1.09.00）：單曲＝播完停；循環＝同一首重來；隨機＝洗牌袋輪播全庫（含變奏，一輪不重複、不跨輪連莊）。曲終才看模式，手點永遠直接播 */
 const MODES=['single','loop','shuffle'];
 let playMode='single', shuffleBag=[];
-const modeBtn=document.getElementById('modeBtn');
-function paintMode(){ modeBtn.textContent=TEXT['ui.mode.'+playMode]; }
-modeBtn.onclick=()=>{ playMode=MODES[(MODES.indexOf(playMode)+1)%MODES.length]; paintMode(); };
+function paintMode(){ $('modeBtn').textContent=TEXT['ui.mode.'+playMode]; }
+$('modeBtn').onclick=()=>{ playMode=MODES[(MODES.indexOf(playMode)+1)%MODES.length]; paintMode(); };
 paintMode();
 function nextShuffle(){
   if(!shuffleBag.length){
     shuffleBag=TUNES.map((_,i)=>i);
     for(let i=shuffleBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffleBag[i],shuffleBag[j]]=[shuffleBag[j],shuffleBag[i]];}
-    if(shuffleBag.length>1&&shuffleBag[shuffleBag.length-1]===playingIdx)
+    if(shuffleBag.length>1&&sel&&sel.k==='t'&&shuffleBag[shuffleBag.length-1]===sel.i)
       [shuffleBag[shuffleBag.length-1],shuffleBag[0]]=[shuffleBag[0],shuffleBag[shuffleBag.length-1]];
   }
   return shuffleBag.pop();
 }
-function handleEnd(i){
-  if(playMode==='loop') playTune(i);
-  else if(playMode==='shuffle') playTune(nextShuffle());
-  else mark(-1);
+function handleEnd(){
+  if(playMode==='loop') playSel();
+  else if(playMode==='shuffle') pick('t',nextShuffle(),true);
+  else { playingNow=false; paintCards(); paintPlay(); }
 }
-function playLibrary(i){
-  if(!activeVoices.size){ Musician.stop(); mark(-1); clearScore(); return; }   // 全關＝靜場
-  Musician.play(TUNES[i],{voice:[...activeVoices],cfg:CONFIG,accomp:accOn,onend:()=>handleEnd(i)});
-  mark(i); renderScore(TUNES[i]);
-}
-stopBtn.onclick=()=>{Musician.stop();mark(-1);clearScore();};
 
-/* 靜音鈕（v1.13.00）：狀態記在 localStorage，鍵名帶專案名不跟別款打架。
-   走引擎的常駐靜音閘，所以播放中按下去立刻沒聲音，不必等這首放完 */
-const MUTE_KEY='musician.muted';
-const muteBtn=document.getElementById('muteBtn');
+/* 靜音鈕（v1.13.00）：狀態記在 localStorage；走引擎的常駐靜音閘，播放中按下去立刻沒聲音 */
+const MUTE_KEY='musician.muted', muteBtn=$('muteBtn');
 let uiMuted=false; try{ uiMuted=localStorage.getItem(MUTE_KEY)==='1'; }catch(e){}
-function paintMute(){
-  muteBtn.textContent=uiMuted?'🔇':'🔊';
-  muteBtn.classList.toggle('off',uiMuted);
-}
-muteBtn.onclick=()=>{
-  uiMuted=!uiMuted;
-  Musician.setMuted(uiMuted);
-  try{ localStorage.setItem(MUTE_KEY, uiMuted?'1':'0'); }catch(e){}
-  paintMute();
-};
-paintMute();
-if(uiMuted) Musician.setMuted(true);   // 重整後沿用上次的選擇
+function paintMute(){ muteBtn.textContent=uiMuted?'🔇':'🔊'; muteBtn.classList.toggle('off',uiMuted); }
+muteBtn.onclick=()=>{ uiMuted=!uiMuted; Musician.setMuted(uiMuted); try{ localStorage.setItem(MUTE_KEY,uiMuted?'1':'0'); }catch(e){} paintMute(); };
+paintMute(); if(uiMuted) Musician.setMuted(true);
 
-clearScore();   // 開頁先給一句提示，不要空白框
-applyMode();
-// 播放中換音色／拉面板／循環時，索引是即興台就重播它，否則走曲庫
-function playTune(i){ return playLibrary(i); }   // 簡譜即興台已併入積木編輯器（2026-10-16）
-
-/* 混音師面板（v1.08.01 全開放；v1.09.00 正名，Roy：「我稱為混音的其實是指揮家，
-   指揮家面板其實是混音師面板XD」——選樂器上場＝指揮（音色列的「指揮」開關），
-   調音量泛音回聲＝混音師（本面板）。gate:false＝人人可開：旋鈕全是音色演奏參數，
-   調壞 F5 復原，無成績可作弊。機制仍是共用面板 v11 的 opts.title */
+/* 混音師面板（v1.08.01 全開放；v1.09.00 正名）。旋鈕全是音色演奏參數，調壞 F5 復原。
+   機制是共用面板 v11 的 opts.title；配色在載入時讀目前色票（換色票後重新整理才套用） */
+{ const cs=getComputedStyle(document.documentElement), c=k=>cs.getPropertyValue('--'+k).trim();
 initDesignerPanel(CONFIG,{
   gate:false, title:'混音師面板',
   labels:{
@@ -513,58 +412,19 @@ initDesignerPanel(CONFIG,{
     h1:'基音', h2:'二倍泛音', h3:'三倍泛音', h4:'四倍泛音',
     chord:'和聲參數', root:'根音', triad:'和弦音',
   },
-  theme:{ bg:'#12152a', text:'#e8e4d8', accent:'#d4a94a', accent2:'#7ea7d8',
-          field:'#1a1e38', line:'#2a2f52', muted:'#8a8fa8', danger:'#c05555' },
+  theme:{ bg:c('bg'), text:c('text'), accent:c('gold'), accent2:c('blue'), field:c('panel2'), line:c('line'), muted:c('muted'), danger:'#c05555' },
   /* 音色參數改了要重按才聽得到（整首是預先排程的）——播放中就自動重按同一首 */
-  onChange:()=>{ if(playingIdx>=0||playingIdx===JIANPU_IDX)playTune(playingIdx); },
-});
-/* 面板把手 ⚙ 預設浮在左下角，手機／平板會蓋到曲目卡（測試團隊版面大臣 2026-10-04）。
-   搬進「正在播放」那一列，跟模式、靜音鈕排在一起，不再浮在內容上。 */
-{ const h = document.getElementById('dp-handle'), row = document.querySelector('.now');
-  if (h && row) { Object.assign(h.style, { position: 'static', left: 'auto', bottom: 'auto', flex: 'none' }); row.appendChild(h); } }
+  onChange:()=>{ if(playingNow) playSel(); },
+}); }
+/* 面板把手 ⚙ 搬進控制列，不再浮在內容上 */
+{ const h=document.getElementById('dp-handle'); if(h){ Object.assign(h.style,{position:'static',left:'auto',bottom:'auto',flex:'none'}); ctl.appendChild(h); } }
 
-/* 多聲部配樂：軌的靜音／獨奏／音量改的是 tune.parts 上的狀態（下次播放也記得），
-   播放中同時呼叫 Musician.setPart 即時生效 */
-{ const sel=document.getElementById('orchSel'), box=document.getElementById('trks');
-  ORCH_TUNES.forEach((t,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=t.name; sel.appendChild(o); });
-  const cur=()=>ORCH_TUNES[+sel.value];
-  const draw=()=>{
-    box.innerHTML='';
-    cur().parts.forEach((p,i)=>{
-      const r=document.createElement('div'); r.className='trk';
-      const vol=p.vol==null?1:p.vol;
-      r.innerHTML='<span>'+p.name+'</span><span class="tv">'+TEXT['ui.voice.'+p.voice]+'</span>'+
-        '<input type="range" min="0" max="1" step="0.05" value="'+vol+'">'+
-        '<button data-k="mute" class="'+(p.mute?'on':'')+'">M</button><button data-k="solo" class="'+(p.solo?'on':'')+'">S</button>';
-      r.querySelector('input').oninput=e=>{ p.vol=+e.target.value; Musician.setPart(i,{vol:p.vol}); };
-      r.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-        p[b.dataset.k]=!p[b.dataset.k]; b.classList.toggle('on',p[b.dataset.k]);
-        Musician.setPart(i,{[b.dataset.k]:p[b.dataset.k]});
-        if(b.dataset.k==='solo') box.querySelectorAll('[data-k=solo]').forEach((x,j)=>{ Musician.setPart(j,{solo:cur().parts[j].solo}); });
-      });
-      box.appendChild(r);
-    });
-  };
-  sel.onchange=draw; draw();
-  // 播多聲部時，播放列也要說實話：曲庫卡熄掉、顯示這首的名字、停止鈕出現（2026-10-17 全面按鍵調查）
-  document.getElementById('orchPlay').onclick=()=>{ mark(-1); clearScore();
-    Musician.play(cur(),{cfg:CONFIG,onend:()=>{ nowEl.textContent=''; stopBtn.style.display='none'; }});
-    nowEl.textContent=TEXT['ui.playing'](cur().name); stopBtn.style.display=''; };
-  document.getElementById('orchStop').onclick=()=>{ Musician.stop(); mark(-1); };
-  // 拆開來改：把這首交給積木編輯器（localStorage 傳遞），在那邊能放進格子的軌變格子，放不進的保留簡譜軌
-  document.getElementById('orchEdit').onclick=()=>{
-    try{ localStorage.setItem('composer.import', JSON.stringify(cur())); }catch(e){}
-    location.href='composer.html?import=1';
-  };
-}
-/* 分頁切換（記住上次看哪一頁） */
-{ const btns=[...document.querySelectorAll('.tabs button')], panels=[...document.querySelectorAll('.panel')];
-  const show=k=>{ btns.forEach(b=>b.classList.toggle('on',b.dataset.p===k)); panels.forEach(p=>p.hidden=p.dataset.p!==k);
-    document.body.classList.toggle('tab-orch',k==='orch');
-    try{ localStorage.setItem('musician.tab',k); }catch(e){} };
-  btns.forEach(b=>b.onclick=()=>show(b.dataset.p));
-  let k='tunes'; try{ k=localStorage.getItem('musician.tab')||'tunes'; }catch(e){}
-  show(btns.some(b=>b.dataset.p===k)?k:'tunes'); }
+/* 開頁：選好上次那首（或第一首）放在舞台上，不自動播——舞台不空 */
+{ let s=null; try{ s=localStorage.getItem('musician.last'); }catch(e){}
+  let k='t', i=-1;
+  if(s&&/^[to]\d+$/.test(s)){ k=s[0]; i=+s.slice(1); }
+  if(!((k==='t'&&TUNES[i])||(k==='o'&&ORCH_TUNES[i]))){ k='t'; i=+document.querySelector('.tune[data-k^="t"]').dataset.k.slice(1); }
+  pick(k,i,false); paintPlay(); }
 </script>
 </body>
 </html>
