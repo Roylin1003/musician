@@ -808,6 +808,74 @@ const Musician = (() => {
     return { id:'pulse', name:opts.name||'脈衝', composer:'公式作曲', bpm:opts.bpm||120, chords:false, notes };
   }
 
+  /* ── 四季變奏（v1.29.00，Master：「請考慮將所有經典名曲去做各種四季變奏，產生不同的韻味」）──
+     season(tune,'spring'|'summer'|'autumn'|'winter') → 多聲部 tune（旋律改編＋伴奏）。不改曲庫資料，播放時現算。
+     四個維度一起變才有「韻味」：①調式（春夏轉大調、秋冬轉小調：先猜原曲的主音與調式，再把第 3／6／7 級上下挪半音）
+     ②速度（春 ×1.1、夏 ×1.2、秋 ×0.85、冬 ×0.7）③旋律樂器與斷奏（春＝長笛斷奏、夏＝小號、秋＝雙簧管、冬＝水晶）
+     ④伴奏（春＝豎琴開放五度＋鐵琴微光；夏＝定音鼓行進＋低音號；秋＝大提琴持續音＋馬林巴落葉；冬＝合唱長音＋弦樂冰霜）。
+     伴奏只用「根音＋五度」（不含三音）——開放五度跟任何旋律音都不容易打架，所以能套在全部 19 首上；每個樣式週期是 1 拍或 2 拍，3/4、4/4 都接得上。
+     ponytail: 主音／調式是用音級統計猜的（旋律落在哪個音、用了哪些音），遇到轉調多的長曲可能猜偏；要更準就改成讀曲庫資料裡的調號 */
+  const SEASONS = {
+    spring: { label:'春', bpm:1.10, mode:'major', mel:'r_flute', vol:.8,  stacc:.7 },
+    summer: { label:'夏', bpm:1.20, mode:'major', mel:'r_tpt',   vol:.75 },
+    autumn: { label:'秋', bpm:.85,  mode:'minor', mel:'r_oboe',  vol:.8  },
+    winter: { label:'冬', bpm:.70,  mode:'minor', mel:'crystal', vol:.85 },
+  };
+  const SCALE_MAJ=[0,2,4,5,7,9,11], SCALE_MIN=[0,2,3,5,7,8,10], NMS=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const nmOf = m => NMS[((m%12)+12)%12]+(Math.floor(m/12)-1);
+  // 統計猜不準的曲：手寫主音／調式；第三欄 true＝這首轉調太多，只換速度、樂器與伴奏，不挪音級
+  const KEY_HINT = { fate:['A','minor'], surprise:['C','major'], turkish:['A','minor'], cancan:['C','major'], danube:['G','major',true], orpheus:['C','major'] };
+  function guessKey(notes){
+    const w=new Array(12).fill(0); let first=-1, last=-1, tot=0;
+    for(const n of notes){ if(!n[0]) continue; const pc=midiOf(n[0])%12; w[pc]+=n[1]; tot+=n[1]; if(first<0) first=pc; last=pc; }
+    if(!tot) return { t:0, mode:'major' };
+    let best=null;
+    for(let t=0;t<12;t++) for(const mode of ['major','minor']){
+      let inS=0; (mode==='major'?SCALE_MAJ:SCALE_MIN).forEach(x=>inS+=w[(x+t)%12]);
+      const score=inS/tot + .6*w[t]/tot + .3*w[(t+7)%12]/tot + (last===t?.5:0) + (first===t?.2:0) + (mode==='major'?.03:0);   // 平手偏大調
+      if(!best||score>best.score) best={ t, mode, score };
+    }
+    return best;
+  }
+  function trimNotes(notes,L){ const out=[]; let acc=0;
+    for(const n of notes){ if(acc+n[1]>L+1e-9){ if(L-acc>1e-6) out.push([n[0],L-acc]); break; } out.push(n); acc+=n[1]; if(acc>=L-1e-9) break; }
+    return out; }
+  function seasonTune(tune,id){
+    const S=SEASONS[id]; if(!S||!Array.isArray(tune.notes)) return null;
+    const hint=KEY_HINT[tune.id], key=hint?{ t:NMS.indexOf(hint[0]), mode:hint[1] }:guessKey(tune.notes), flip=key.mode!==S.mode&&!(hint&&hint[2]);
+    const adj=m=>{ if(!flip) return m; const rel=(((m%12)-key.t)+12)%12;
+      if(key.mode==='major') return (rel===4||rel===9||rel===11)?m-1:m;    // 大→小：降 3、6、7 級
+      return (rel===3||rel===8||rel===10)?m+1:m; };                       // 小→大：升 3、6、7 級
+    const melody=[]; let total=0;
+    for(const n of tune.notes){ total+=n[1];
+      if(!n[0]){ melody.push([null,n[1]]); continue; }
+      const name=nmOf(adj(midiOf(n[0])));
+      if(S.stacc && n[1]<=1) melody.push([name,n[1]*S.stacc],[null,n[1]*(1-S.stacc)]); else melody.push([name,n[1]]);
+    }
+    const base=oct=>12*(oct+1)+key.t, T=Math.ceil(total);
+    const loop=(unit,L)=>{ const u=unit.reduce((x,n)=>x+n[1],0), out=[]; for(let a=0;a<L;a+=u) out.push(...unit); return trimNotes(out,L); };
+    const part=(name,voice,vol,pan,notes)=>({ name, voice, vol, pan, notes });
+    const parts=[part('旋律',S.mel,S.vol,0,melody)];
+    const r2=base(2), f2=r2+7, r3=base(3), f3=r3+7;
+    if(id==='spring'){
+      parts.push(part('豎琴',  'r_harp',  .5, .3, loop([[nmOf(r3),.5],[nmOf(f3),.5],[nmOf(r3+12),.5],[nmOf(f3),.5]],T)));
+      parts.push(part('鐵琴微光','r_glock',.3, .4, loop([[nmOf(base(6)),1],[null,3]],T)));
+    } else if(id==='summer'){
+      parts.push(part('定音鼓', 'timpani',.65, 0, loop([[nmOf(r2),1],[nmOf(f2),1]],T)));
+      parts.push(part('低音號', 'r_tuba', .5,-.35, loop([[nmOf(r2),4]],T)));
+    } else if(id==='autumn'){
+      parts.push(part('大提琴', 'r_cello',.6,-.35, loop([[nmOf(r2),4]],T)));
+      parts.push(part('弦樂',   'strings',.3, .3, loop([[nmOf(f3),4]],T)));
+      parts.push(part('馬林巴落葉','r_mar',.35,.35, loop([[nmOf(base(5)),1],[null,3],[nmOf(base(5)+7),1],[null,3]],T)));
+    } else {
+      parts.push(part('合唱',   'choir',  .3, .2, loop([[nmOf(r3),4]],T)));
+      parts.push(part('弦樂',   'strings',.22,-.2, loop([[nmOf(f3),4]],T)));
+      parts.push(part('鐵琴冰霜','r_glock',.25,.4, loop([[nmOf(base(6)+7),1],[null,7]],T)));
+    }
+    return { id:(tune.id||'tune')+'-'+id, name:tune.name+'・'+S.label, orig:tune.orig, composer:tune.composer, season:id,
+             bpm:Math.round((tune.bpm||100)*S.bpm), chords:false, parts, from:{ key:NMS[key.t], mode:key.mode, to:S.mode } };
+  }
+
   /* tune → 簡譜 token（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）。
      每個 token：{d 音級字元, acc 升降, oct 八度偏移（＋高／－低，UI 畫點）,
                   beats 拍數, at 起拍, sec 起秒, dur 秒, i 原始 notes 索引}
@@ -848,7 +916,7 @@ const Musician = (() => {
     return p>curLen+0.5 ? -1 : Math.max(0,p);
   }
 
-  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, fromFormula, fromPulse, compileFormula, toJianpu, position,
+  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, fromFormula, fromPulse, compileFormula, season:seasonTune, SEASONS, toJianpu, position,
            setMuted, get muted(){ return userMuted; },
            tail:()=>curTail,   // 上一次播放算出的尾音緩衝（秒）——自檢台用它守這條回歸
            get voices(){ return Object.keys(VOICES); },

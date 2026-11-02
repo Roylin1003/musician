@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Royal Musician 音樂家</title>
-<link rel="stylesheet" href="musician-theme.css?v=1.28.00">
-<script src="musician-shell.js?v=1.28.00"></script>
+<link rel="stylesheet" href="musician-theme.css?v=1.29.00">
+<script src="musician-shell.js?v=1.29.00"></script>
 <style>
   /* 聽（欣賞）頁骨架（改版提案階段 2，2026-11-02）：舞台在左、曲庫在右；手機由上到下同一順序。
      色票在 musician-theme.css，這裡只寫版面。 */
@@ -18,6 +18,11 @@
   .nowrow{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; min-height:34px; flex:none;}
   .nowname{font-size:24px; color:var(--gold); font-weight:700;}
   .noworig{font-size:15px; color:var(--blue); font-style:italic;}
+  .seasons{margin-left:auto; display:inline-flex; gap:6px; flex-wrap:wrap;}
+  .seasons[hidden]{display:none;}
+  .seasons button{background:var(--panel); border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:0 16px; min-height:44px; font-size:16px; cursor:pointer;}
+  .seasons button:hover{border-color:var(--blue);}
+  .seasons button.on{border-color:var(--gold); color:var(--gold);}
 
   /* 舞台：捲簾高度＝軌數×每軌高（寬扁，不拉成高塔）；單旋律下面接簡譜全文，吃掉剩下的高度 */
   .stage{flex:0 1 calc(var(--lanes,1) * var(--laneH)); min-height:0; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr);
@@ -107,7 +112,7 @@
 
   <div class="app" id="app">
     <main class="stagecol" id="stagecol">
-      <div class="nowrow"><span class="nowname" id="nowName"></span><span class="noworig" id="nowOrig"></span></div>
+      <div class="nowrow"><span class="nowname" id="nowName"></span><span class="noworig" id="nowOrig"></span><span class="seasons" id="seasons"></span></div>
       <section class="stage" id="stage">
         <div class="lanectl" id="lanectl"></div>
         <canvas id="roll"></canvas>
@@ -130,10 +135,11 @@
 
   <footer class="credits"><a href="https://versilian-studios.com/vsco-community/" target="_blank" rel="noopener" data-t="credits.samples"></a></footer>
 
-<script src="config.js?v=1.28.00"></script>
-<script src="strings.zh.js?v=1.28.00"></script>
-<script src="musician.js?v=1.28.00"></script>
-<script src="designer-panel.js?v=1.28.00"></script>
+<script src="config.js?v=1.29.00"></script>
+<script src="works.js?v=1.29.00"></script>
+<script src="strings.zh.js?v=1.29.00"></script>
+<script src="musician.js?v=1.29.00"></script>
+<script src="designer-panel.js?v=1.29.00"></script>
 <script>
 applyText(CONFIG); applyStaticText();
 const $=id=>document.getElementById(id);
@@ -143,24 +149,25 @@ const stageEl=$('stage'), stagecol=$('stagecol'), ctl=$('ctl'), tunesEl=$('tunes
    指揮關（預設）＝單選——點哪個換哪個，快速比音色；
    指揮開＝自由編制（同旋律 doubling），可以全部關掉＝靜場。播放中改編制立刻生效。 */
 let activeVoices=new Set(['piano']), mixMode=false;   // 玩家預設鋼琴版（Roy 定案 2026-09-16）
-let sel=null, playingNow=false;                        // sel＝{k:'t'|'o', i}：選中的曲；playingNow＝正在播
+let sel=null, playingNow=false, season='orig';   // season：原曲／spring／summer／autumn／winter（四季變奏，播放時現算）                        // sel＝{k:'t'|'o', i}：選中的曲；playingNow＝正在播
 
 Musician.setSamples(SAMPLES,'samples/vsco/');   // 真樂器取樣：註冊成音色，第一次用到才下載
 const voicesEl=$('voices');
-{ let realSep=false;
+{ /* 音色分三組（2026-11-03 Master：「真樂器取樣的合成音色先降級」）：真樂器在最前面；跟真樂器重複的合成版（弦樂／長笛／銅管／豎琴／定音鼓）
+     降到「輕量版」次要組——還是能選（免下載、離線可用、舊曲與下游遊戲照舊呼叫），只是不再擺在第一排；特色合成（水晶、8-bit、鋼琴、合唱、撥弦、函數音色）沒有真樂器可換，留著 */
+  const LITE=new Set(['strings','flute','brass','harp','timpani']);
   const sep=t=>{ const d=document.createElement('div'); d.className='vsep'; d.textContent=t; voicesEl.appendChild(d); };
-  sep(TEXT['ui.synthGroup']);
-  Musician.voices.forEach(v=>{
-    if(Musician.isSampled(v)&&!realSep){ realSep=true; sep(TEXT['ui.realGroup']); }
-    const b=document.createElement('button');
-    b.textContent=TEXT['ui.voice.'+v]; b.dataset.v=v;
+  const mkBtn=v=>{ const b=document.createElement('button'); b.textContent=TEXT['ui.voice.'+v]||v; b.dataset.v=v;
     b.onclick=()=>{
       if(mixMode){ activeVoices.has(v)?activeVoices.delete(v):activeVoices.add(v); }
       else { activeVoices=new Set([v]); $('voicePop').hidden=true; }
       paintVoices(); if(playingNow&&sel.k==='t') playSel();
     };
-    voicesEl.appendChild(b);
-  }); }
+    voicesEl.appendChild(b); };
+  const all=Musician.voices, real=all.filter(v=>Musician.isSampled(v)), lite=all.filter(v=>LITE.has(v)), char=all.filter(v=>!Musician.isSampled(v)&&!LITE.has(v));
+  sep(TEXT['ui.realGroup']); real.forEach(mkBtn);
+  sep(TEXT['ui.synthGroup']); char.forEach(mkBtn);
+  sep(TEXT['ui.liteGroup']); lite.forEach(mkBtn); }
 const mixBtn=document.createElement('button'); mixBtn.id='mixToggle'; mixBtn.textContent=TEXT['ui.mix'];
 mixBtn.onclick=()=>{
   mixMode=!mixMode;
@@ -218,6 +225,14 @@ secHead('多聲部配樂');
 ORCH_TUNES.forEach((t,i)=>addCard('o'+i,t.name,'多聲部　'+t.parts.length+' 軌',()=>pick('o',i,true)));
 
 const tuneOf=s=>s.k==='t'?TUNES[s.i]:ORCH_TUNES[s.i];
+/* 四季變奏（2026-11-03 Master：「將所有經典名曲去做各種四季變奏」）：選了季節，曲庫每一首都變成該季的多聲部版（調式、速度、樂器、伴奏一起換）；
+   變奏是播放時現算的，不存進曲庫，所以任何一首都有；ORCH 曲本來就是多聲部，不套季節 */
+const seasonOf=s=>{ if(s.k!=='t'||season==='orig') return null; try{ return Musician.season(TUNES[s.i],season); }catch(e){ return null; } };
+{ const box=$('seasons'); box.innerHTML='<button data-s="orig">'+TEXT['ui.season.orig']+'</button>'+['spring','summer','autumn','winter'].map(k=>'<button data-s="'+k+'">'+Musician.SEASONS[k].label+'</button>').join('');
+  try{ const v=localStorage.getItem('musician.season'); if(v&&(v==='orig'||Musician.SEASONS[v])) season=v; }catch(e){}
+  const paint=()=>box.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===season));
+  box.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; season=b.dataset.s; try{ localStorage.setItem('musician.season',season); }catch(x){} paint(); if(sel) pick(sel.k,sel.i,playingNow); };
+  window.paintSeasons=paint; paint(); }
 
 /* ── 舞台：每軌一條捲簾（寬扁）；單旋律下面接簡譜全文 ──────────────
    lanes＝[{name,tokens,color}]；畫布像素尺寸由 ResizeObserver 追著 CSS 尺寸走
@@ -336,17 +351,20 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden && Musici
 /* ── 選曲／播放 ── */
 function pick(k,i,play){
   sel={k,i}; try{ localStorage.setItem('musician.last',k+i); }catch(e){}
-  const tune=tuneOf(sel);
+  const sv=seasonOf(sel), tune=sv||tuneOf(sel);
   $('nowName').textContent=tune.name; $('nowOrig').textContent=k==='t'?(tune.orig||''):'';
-  ctl.classList.toggle('orch',k==='o');
-  if(k==='t') renderScore(tune); else renderOrch(tune);
+  $('seasons').hidden=k==='o';
+  ctl.classList.toggle('orch',k==='o'||!!sv);
+  if(k==='t'&&!sv) renderScore(tune); else renderOrch(tune);
+  curPlay=tune;
   paintCards();
   if(play) playSel();
 }
+let curPlay=null;   // 目前舞台上那一首（原曲、四季版或多聲部曲）——播放就播它
 function playSel(){
-  if(sel.k==='t'&&!activeVoices.size){ Musician.stop(); playingNow=false; paintCards(); paintPlay(); return; }   // 全關＝靜場
-  const tune=tuneOf(sel);
-  if(sel.k==='t') Musician.play(tune,{voice:[...activeVoices],cfg:CONFIG,accomp:accOn,onend:handleEnd});
+  if(sel.k==='t'&&!seasonOf(sel)&&!activeVoices.size){ Musician.stop(); playingNow=false; paintCards(); paintPlay(); return; }   // 全關＝靜場
+  const tune=curPlay||tuneOf(sel);
+  if(sel.k==='t'&&!tune.parts) Musician.play(tune,{voice:[...activeVoices],cfg:CONFIG,accomp:accOn,onend:handleEnd});
   else Musician.play(tune,{cfg:CONFIG,onend:handleEnd});
   playingNow=true; paintCards(); paintPlay();
   if(!scoreRAF) scoreRAF=requestAnimationFrame(tickScore);
@@ -362,8 +380,8 @@ function paintCards(){
 }
 function paintPlay(){ $('playBtn').textContent=playingNow?'■':'▶'; $('playBtn').title=playingNow?'停止':'播放'; }
 $('playBtn').onclick=()=>{ if(playingNow) stopAll(); else if(sel) playSel(); };
-$('editBtn').onclick=()=>{   // 拆開來改：把這首交給積木編輯器（localStorage 傳遞）
-  try{ localStorage.setItem('composer.import', JSON.stringify(tuneOf(sel))); }catch(e){}
+$('editBtn').onclick=()=>{   // 拆開來改：把這首（含四季版）交給創作台（localStorage 傳遞）
+  try{ localStorage.setItem('composer.import', JSON.stringify(curPlay||tuneOf(sel))); }catch(e){}
   location.href='composer.html?import=1';
 };
 
