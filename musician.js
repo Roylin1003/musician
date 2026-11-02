@@ -786,7 +786,7 @@ const Musician = (() => {
     const base=opts.base==null?4:opts.base, NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
     const notes=[];
     for(let n=0;n<count;n++){
-      const env={n,x:n/count}, d=Math.round(pitch(env)), r=rhythm({n,x:n/count});
+      const nn=n+(opts.offset||0), env={n:nn,x:n/count}, d=Math.round(pitch(env)), r=rhythm({n:nn,x:n/count});   // offset：接續播放時從第幾顆音往下算
       const beats=Number.isFinite(r)?Math.min(4,Math.max(0.5,Math.round(r*2)/2)):1;
       if(!Number.isFinite(d)){ notes.push([null,beats]); continue; }
       const m=((d%(2*R))+2*R)%(2*R), deg=m<R?m:2*R-1-m;          // 鏡射折回 [0,R)
@@ -802,7 +802,7 @@ const Musician = (() => {
   function fromPulse(text, opts={}){
     const ev=compileFormula(text), B=Math.max(1,Math.min(256,Math.floor(opts.beats||16))), notes=[], pitch=opts.pitch||'C2';
     for(let b=0;b<B;b++){
-      const v=ev({b,n:b,x:b/B}), r=Number.isFinite(v)?Math.max(0,Math.min(8,Math.round(v))):0;
+      const v=ev({b:b+(opts.offset||0),n:b+(opts.offset||0),x:b/B}), r=Number.isFinite(v)?Math.max(0,Math.min(8,Math.round(v))):0;
       if(r<1) notes.push([null,1]); else for(let i=0;i<r;i++) notes.push([pitch,1/r]);
     }
     return { id:'pulse', name:opts.name||'脈衝', composer:'公式作曲', bpm:opts.bpm||120, chords:false, notes };
