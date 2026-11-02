@@ -55,6 +55,9 @@
     <div id="err"></div>
     <div class="row"><button id="go">▶ 演奏</button><button id="stop">■ 停止</button><button id="copy">複製連結</button></div>
     <div class="chips" id="presets"></div>
+    <details id="videoBox" open><summary style="cursor:pointer;color:var(--gold);font-size:18px;padding:6px 0">影片重現——《Math Functions That Go Insanely Hard》逐段</summary>
+      <div class="chips" id="video" style="margin:6px 0"></div>
+      <div id="vinfo" style="font-size:15px;color:var(--muted);line-height:1.6"></div></details>
     <details id="classicsBox" open><summary style="cursor:pointer;color:var(--gold);font-size:18px;padding:6px 0">經典公式圖鑑——點一條就聽</summary>
       <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--text);margin:6px 0"><input type="checkbox" id="addMode" style="width:22px;height:22px">加成新一軌（不取代目前的）</label>
       <div id="classics"></div></details>
@@ -66,10 +69,10 @@
   </section>
 </main>
 
-<script src="config.js?v=1.25.02"></script>
-<script src="strings.zh.js?v=1.25.02"></script>
-<script src="musician.js?v=1.25.02"></script>
-<script src="classics.js?v=1.25.02"></script>
+<script src="config.js?v=1.25.03"></script>
+<script src="strings.zh.js?v=1.25.03"></script>
+<script src="musician.js?v=1.25.03"></script>
+<script src="classics.js?v=1.25.03"></script>
 <script>
 const $=id=>document.getElementById(id);
 const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];
@@ -132,6 +135,12 @@ $('classics').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; co
   else if(c.kind==='pulse') tracks=[trk,T({name:'低音',f:'floor(3*frac(n*phi))',r:'2',voice:'bounce',base:2,vol:0.8,bounce:1})];
   else tracks=[trk];
   state.tracks=tracks; paintTracks(); startFresh(); };
+/* 影片重現：每段一組軌；點了載入、顯示畫面上的公式與字幕、播放 */
+$('video').innerHTML=VIDEO.map((v,i)=>'<button data-v="'+i+'">'+v.name+'</button>').join('');
+$('video').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const v=VIDEO[b.dataset.v];
+  load({bpm:v.bpm,tracks:v.tracks.map(t=>T(JSON.parse(JSON.stringify(t))))});
+  $('vinfo').innerHTML='<div style="color:var(--gold);font-size:17px">“'+esc(v.caption)+'”</div><div style="font-family:Consolas,monospace;color:var(--text)">'+esc(v.shown)+'</div><div>'+esc(v.note)+'</div>';
+  startFresh(); };
 function load(s){ state=s; $('bpm').value=s.bpm||120; paintTracks(); }
 
 let chunk=0, playing=false, raf=0;   // 持續播放：每一段接著上一段的 n 往下算（旋律繼續演化，不是原曲重複）

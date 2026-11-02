@@ -47,3 +47,51 @@ const CLASSICS = [
   { g:'音色', name:'魏爾斯特拉斯波形',     kind:'wave', w:'0.7*sum(k,0,5,0.5^k*sin(2*pi*3^k*f*t))*exp(-t*2)', note:'影片 7 號' },
   { g:'音色', name:'雜訊（亂數 hash）',    kind:'wave', w:'0.7*(frac(sin(t*12345.6)*43758.5453)*2-1)*exp(-t*18)', note:'鼓的噪音部分' },
 ];
+
+/* 影片重現（YouTube Shorts〈Math Functions That Go Insanely Hard〉，@thelab.67）：影片每一段一個公式，這裡每段是一組軌。
+   shown＝影片畫面上寫的公式；caption＝畫面字幕。tracks 欄位同公式作曲台的一軌（缺的欄位用預設）。
+   重現是「由公式推出聲音」，沒聽過原片音檔：τ 等小字看不清的數值是估的，在 note 欄標明。 */
+const VIDEO = [
+  { name:'1 hardbass', bpm:150, caption:'hardbass = a sine inside a sine',
+    shown:'y(t) = sin(2πft + I(t)·sin(4πft)),  I(t) = 0.6 + 4.4·e^(−t/τ)',
+    note:'τ 在畫面上看不清，取 e^(−9t)（約 0.11 秒）；調變頻率是載波的 2 倍',
+    tracks:[
+      { name:'鼓', kind:'pulse', f:'1', voice:'kick', base:2, vol:0.9 },
+      { name:'咬音（波形公式）', f:'2*floor(3*frac(n*phi))', r:'0.5', voice:'wave', base:3, vol:0.8, wave:'sin(2*pi*f*t+(0.6+4.4*exp(-t*9))*sin(4*pi*f*t))*exp(-t*3)' } ] },
+  { name:'2 脈衝鼓', bpm:120, caption:'every spike = one tuned kick',
+    shown:'δ(x) = lim(ε→0) 1/(ε√π)·e^(−x²/ε²),  每拍打 r = 1, 2, 3, 4 下',
+    note:'脈衝＝一瞬間的「咚」；公式台的脈衝公式就是「這一拍打幾下」',
+    tracks:[ { name:'調音脈衝鼓', kind:'pulse', f:'1+mod(b,4)', voice:'kick', base:2, vol:0.9 } ] },
+  { name:'3 彈跳低音', bpm:120, caption:'every bass note bounces up an octave',
+    shown:'f(t) = f_k · 2^(−e^(−(t−t_k)/τ)),  鼓打正拍、低音打反拍',
+    note:'反拍＝偶數拍休止（公式 0/mod(n,2) 在偶數拍算出 NaN＝休止）；彈跳深度 1 個八度',
+    tracks:[
+      { name:'鼓（正拍）', kind:'pulse', f:'1', voice:'kick', base:2, vol:0.9 },
+      { name:'低音（反拍）', f:'2*floor(3*frac(n*phi))+0/mod(n,2)', r:'1', voice:'bounce', base:2, vol:0.9, bounce:1 } ] },
+  { name:'4 鐘形包絡', bpm:100, caption:'every note = one bell curve',
+    shown:'g(t) = e^(−(t−t_k)²/σ²)  每個音沿自己的鐘形曲線漲落',
+    note:'鐘形寬度＝音長 30%；沒有尖銳的起音與收音',
+    tracks:[ { name:'旋律（鐘形）', f:'floor(7*frac(n*phi))', r:'1', voice:'fm', base:4, vol:0.8, bell:0.3 } ] },
+  { name:'5 波形折疊', bpm:100, caption:'|x| folds a sine back on itself',
+    shown:'y = 1 − 4·|frac((g·sinφ + 1)/4) − ½|   增益 g 越大折越多越硬',
+    note:'「折疊音」音色：g 從 6 降到 1.2（每個音由硬變柔）；下方另有純波形公式版',
+    tracks:[
+      { name:'折疊音', f:'floor(7*frac(n*phi))', r:'1', voice:'folder', base:3, vol:0.8 },
+      { name:'折疊（波形公式）', f:'floor(7*frac(n*phi))+7', r:'2', voice:'wave', base:3, vol:0.6, wave:'(1-4*abs(frac(((6*exp(-t*4)+1)*sin(2*pi*f*t)+1)/4)-0.5))*exp(-t*2)' } ] },
+  { name:'7 魏爾斯特拉斯', bpm:110, caption:'the curve with no smooth spot',
+    shown:'W(x) = Σ(n=0→3) aⁿ·cos(3ⁿπx)   處處連續、處處不可微',
+    note:'「怪物音」音色：4 層、頻率每層 ×3、振幅每層 ×0.55',
+    tracks:[ { name:'怪物', f:'floor(7*frac(n*phi))', r:'1', voice:'monster', base:3, vol:0.8 } ] },
+  { name:'爬升 e^x', bpm:120, caption:"e^x: the climb keeps speeding up",
+    shown:'y = (e^(3x) − 1)/(e^3 − 1)   每一步都比上一步來得更快',
+    note:'爬升＝每拍打幾下隨 x 指數增加；嗆鈸同公式墊高頻',
+    tracks:[
+      { name:'鼓', kind:'pulse', f:'1+floor(7*(exp(3*x)-1)/(exp(3)-1))', voice:'kick', base:2, vol:0.8 },
+      { name:'嗆', kind:'pulse', f:'floor(8*(exp(3*x)-1)/(exp(3)-1))', voice:'hat', base:6, vol:0.5 } ] },
+  { name:'終 2＋7 最終首領', bpm:128, caption:'2 + 7 = the final boss',
+    shown:'Σ aⁿcos(3ⁿπx) + Σ_k δ(x − x_k)   怪物＋脈衝，從第 8 拍起速度加倍',
+    note:'第 8 拍起打擊數×2、旋律時值減半（公式用 floor(b/8) 做「到了第 8 拍」的開關）',
+    tracks:[
+      { name:'脈衝鼓', kind:'pulse', f:'(1+mod(b,4))*(1+min(1,floor(b/8)))', voice:'kick', base:2, vol:0.9 },
+      { name:'怪物', f:'floor(7*frac(n*phi))', r:'1/(1+min(1,floor(n/8)))', voice:'monster', base:3, vol:0.8 } ] },
+];
