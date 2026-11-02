@@ -69,10 +69,10 @@
   </section>
 </main>
 
-<script src="config.js?v=1.25.03"></script>
-<script src="strings.zh.js?v=1.25.03"></script>
-<script src="musician.js?v=1.25.03"></script>
-<script src="classics.js?v=1.25.03"></script>
+<script src="config.js?v=1.25.04"></script>
+<script src="strings.zh.js?v=1.25.04"></script>
+<script src="musician.js?v=1.25.04"></script>
+<script src="classics.js?v=1.25.04"></script>
 <script>
 const $=id=>document.getElementById(id);
 const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];
@@ -117,7 +117,12 @@ function paintTracks(){
 $('tracks').addEventListener('input',e=>{ const k=e.target.dataset.k, i=e.target.closest('.trk').dataset.i; if(!k) return;
   const t=state.tracks[i]; t[k]=e.target.type==='checkbox'?e.target.checked:(e.target.type==='number'?+e.target.value:e.target.value);
   if(k==='kind'||k==='voice'){ if(k==='voice'&&t.voice==='wave'&&!t.wave) t.wave='sin(2*pi*f*t)*exp(-t*4)'; paintTracks(); }
-  build(false); });
+  const ok=build(false);
+  if(playing&&ok&&(k==='kind'||k==='voice')) go();   // 下拉選單重畫後原元素已換掉、change 事件到不了，所以這兩項在這裡直接重播
+  if(playing&&(k==='vol'||k==='mute')) Musician.setPart(+i,{vol:t.vol,mute:t.mute}); });   // 音量／靜音：播放中即時生效，不重播
+/* 其餘改動（音色、公式、彈跳、鐘形、八度…）：整段是開播時預先排好的，所以播放中改了就用新設定重播這一段（同一段、從頭）。
+   文字框等 change（按 Enter／離開欄位）才重播，避免打一個字重播一次 */
+$('tracks').addEventListener('change',e=>{ const k=e.target.dataset.k; if(!k||k==='vol'||k==='mute'||k==='name'||!playing) return; if(build(false)) go(); });
 $('tracks').addEventListener('click',e=>{ if(!e.target.classList.contains('x')) return; state.tracks.splice(+e.target.closest('.trk').dataset.i,1); paintTracks(); build(false); });
 $('addTrk').onclick=()=>{ if(state.tracks.length>=6) return; state.tracks.push(T({name:'軌 '+(state.tracks.length+1),f:'n',voice:'piano'})); paintTracks(); build(false); };
 $('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
@@ -206,6 +211,7 @@ $('go').onclick=startFresh;
 $('stop').onclick=()=>{ playing=false; Musician.stop(); draw(-1); };
 function frame(){ raf=0; draw(playing?Musician.position():-1); if(playing) raf=requestAnimationFrame(frame); }
 for(const id of ['cnt','beats','bpm','sc','span']) $(id).addEventListener('input',()=>build(false));
+for(const id of ['cnt','beats','bpm','sc','span']) $(id).addEventListener('change',()=>{ if(playing&&build(false)) go(); });
 $('copy').onclick=()=>{
   const s=Object.assign({},state,{bpm:+$('bpm').value,cnt:+$('cnt').value,beats:+$('beats').value,sc:$('sc').value,span:+$('span').value});
   const u=location.origin+location.pathname+'?s='+encodeURIComponent(JSON.stringify(s));
