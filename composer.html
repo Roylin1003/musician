@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>積木編輯器 · Royal Musician</title>
-<link rel="stylesheet" href="musician-theme.css?v=1.26.00">
-<script src="musician-shell.js?v=1.26.00"></script>
+<title>創作台 · Royal Musician</title>
+<link rel="stylesheet" href="musician-theme.css?v=1.27.00">
+<script src="musician-shell.js?v=1.27.00"></script>
 <style>
   :root{ --hdrW:200px; }
   *{box-sizing:border-box; margin:0; padding:0;}
@@ -49,9 +49,24 @@
   .jpbtns{display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;} .jpbtns button{padding:6px 14px; font-size:16px;}
   .cell.jpcell{justify-content:flex-start; align-items:center; flex-direction:row; gap:8px; padding:0 14px; white-space:nowrap;}
 
+  /* 目前音：每一軌正在發的音名（公式軌的旋律看得到走到哪） */
+  #nowline{flex:none; min-height:38px; display:flex; gap:20px; flex-wrap:wrap; align-items:center; padding:4px 16px; border-bottom:1px solid var(--line); font:20px Consolas,monospace;}
+  #nowline span{white-space:nowrap;}
+  /* 公式圖鑑（左欄下方，收合）與公式軌編輯面板 */
+  #atlas{flex:none; border-top:1px solid var(--line); padding:8px 20px; max-height:42vh; overflow:auto;}
+  #atlas summary{color:var(--gold); font-size:17px;}
+  #atlas .ag{color:var(--muted); font-size:14px; margin:10px 0 4px;}
+  #atlas .chips{display:flex; flex-wrap:wrap; gap:6px;} #atlas .chips button{padding:4px 10px; font-size:14px; min-height:36px;}
+  #vinfo{font-size:14px; color:var(--muted); line-height:1.6; margin-top:8px;} #vinfo b{color:var(--gold); font-weight:600;} #vinfo code{font-family:Consolas,monospace; color:var(--text);}
+  .fxp label{display:flex; flex-direction:column; gap:4px; color:var(--muted); font-size:14px; margin-top:10px;}
+  .fxp input[type=text],.fxp input[type=number],.fxp select{width:100%; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--gold); font-size:16px; min-height:44px;}
+  .fxp input[type=text]{font-family:Consolas,monospace; font-size:18px;}
+  .fxp .two{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .fxp .err{color:var(--bad); font-size:14px; min-height:1.4em; margin-top:6px;}
+  .fxp button.del{margin-top:14px;}
   #main{display:flex; flex-direction:column; min-width:0; min-height:0;}
   #scroller{flex:1; overflow:auto;}
-  #grid{display:grid; gap:8px; padding:12px; height:100%; grid-template-rows:32px repeat(6,minmax(72px,1fr));}
+  #grid{display:grid; gap:8px; padding:12px; height:100%; grid-template-rows:32px repeat(var(--rows,6),minmax(72px,1fr));}
   .cell,.hd{border-radius:12px;}
   .ruler{color:var(--muted); font-size:18px; text-align:center; padding-top:6px; cursor:default; border-radius:8px;}
   .ruler.now,.cell.now{outline:3px solid var(--blue);}
@@ -86,7 +101,7 @@
   /* 矮螢幕（筆電 768 高以下）：鍵帽、軌高、簡譜摺疊區讓位給格子，維持整頁不捲 */
   @media (min-width:901px) and (max-height:760px){
     #kb{padding:6px 14px;} #kb .keys{grid-template-rows:34px 34px;} #kb .kc b{font-size:16px;} #kb .side .kc{height:34px;}
-    #grid{grid-template-rows:28px repeat(6,minmax(60px,1fr)); gap:6px;}
+    #grid{grid-template-rows:28px repeat(var(--rows,6),minmax(60px,1fr)); gap:6px;}
     .hd{padding:4px 8px; gap:3px;} .hd select{padding:2px 6px;} .hd button{padding:2px 0;}
     .cell.chordc{font-size:22px;}
     details{display:none;}
@@ -99,7 +114,7 @@
   @media (max-width:900px){
     :root{--hdrW:150px;}
     #grid{grid-template-rows:none; grid-auto-rows:auto;}
-    body{grid-template-columns:1fr; grid-template-rows:auto 1fr 320px; font-size:16px;}
+    body{grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) 320px; font-size:16px;}
     #bar{grid-column:1; padding:10px 12px; gap:8px;} #bar h1{font-size:22px;}
     #palette{grid-row:3; border-right:none; border-top:1px solid var(--line);}
     #step{padding:8px 12px; font-size:17px;} #pal{padding:10px 12px;}
@@ -125,6 +140,7 @@
     <label><span data-t="cp.bpm"></span><input id="bpm" type="number" min="40" max="240"></label>
     <button id="addBars" data-t="cp.addBars"></button><button id="delBars" data-t="cp.delBars"></button>
     <button id="example" data-t="cp.example"></button>
+    <label><span data-t="fx.after"></span><select id="after"><option value="once" data-t="fx.once"></option><option value="repeat" data-t="fx.repeat"></option><option value="continue" data-t="fx.cont"></option></select></label>
     <button id="stop" data-t="cp.stop"></button>
     <button id="tutBtn" data-t="tut.btn"></button>
     <button id="play" data-t="cp.play"></button>
@@ -133,7 +149,9 @@
   <aside id="palette">
     <div id="step"></div>
     <div id="pal"></div>
+    <details id="atlas"><summary data-t="fx.atlas"></summary><div id="atlasBody"></div></details>
     <div id="tools">
+      <button id="addF" data-t="fx.addF"></button><button id="addP" data-t="fx.addP"></button>
       <button id="clear" data-t="cp.clear"></button><button id="fill" data-t="cp.fill"></button>
       <button id="save" data-t="cp.save"></button><button id="load" data-t="cp.load"></button>
       <button id="trSave" data-t="cp.trackSave"></button><button id="trLoad" data-t="cp.trackLoad"></button>
@@ -144,15 +162,17 @@
   </aside>
 
   <section id="main">
+    <div id="nowline"></div>
     <div id="scroller"><div id="grid"></div></div>
     <div id="kb"></div>
     <details><summary><span data-t="cp.jp"></span>：<b id="jpName"></b></summary><textarea id="jp" readonly></textarea></details>
   </section>
 
-<script src="config.js?v=1.26.00"></script>
-<script src="strings.zh.js?v=1.26.00"></script>
-<script src="musician.js?v=1.26.00"></script>
-<script src="composer.js?v=1.26.00"></script>
+<script src="config.js?v=1.27.00"></script>
+<script src="strings.zh.js?v=1.27.00"></script>
+<script src="musician.js?v=1.27.00"></script>
+<script src="composer.js?v=1.27.00"></script>
+<script src="classics.js?v=1.27.00"></script>
 <script>
 applyText(CONFIG); applyStaticText();
 Musician.setSamples(SAMPLES, 'samples/vsco/');
@@ -174,23 +194,60 @@ let sel = { row:-1, bar:0 }, playing = false;
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch(e){} };
 const say = t => { $('msg').textContent = t; setTimeout(() => { if($('msg').textContent === t) $('msg').textContent = ''; }, 4000); };
 const trOf = () => st.tracks[Math.max(0, sel.row)];
-const mode = () => sel.row < 0 ? 'chord' : ({ melody:'melody', jp:'jp' }[st.tracks[sel.row].kind] || 'pat');
+const mode = () => sel.row < 0 ? 'chord' : ({ melody:'melody', jp:'jp', formula:'formula', pulse:'formula' }[st.tracks[sel.row].kind] || 'pat');
 const barText = (tr, b) => Composer.jianpu(Composer.melodyBar(tr.blocks[b], tr.oct, C)).replace(/ -/g, '');
 
+/* ── 公式軌：把公式算成 notes（長度補到整首一樣長；接續演化時每軌各記各的 n）── */
+const trunc = (notes, L) => { const out = []; let acc = 0;
+  for(const n of notes){ if(acc + n[1] > L + 1e-9){ if(L - acc > 1e-6) out.push([n[0], L - acc]); break; } out.push(n); acc += n[1]; if(acc >= L - 1e-9) break; }
+  return out; };
+const sumB = notes => notes.reduce((x, n) => x + n[1], 0);
+let offs = {}, used = {}, chunk = 0;
+let nowParts = null, nowHtml = '';   // 目前音一行的狀態（tick 啟動得早，宣告放前面）
+function gen(tr, total, k){
+  try {
+    let notes;
+    if(tr.kind === 'pulse'){
+      const B = Math.max(1, Math.round(tr.cyc || 16)), cycles = Math.max(1, Math.ceil(total / B)); notes = [];
+      for(let c = 0; c < cycles; c++) notes = notes.concat(Musician.fromPulse(tr.f, { beats:B, pitch:'C' + (tr.base == null ? 2 : tr.base), offset:(offs[k] || 0) + c * B }).notes);
+      used[k] = cycles * B;
+    } else {
+      let n = 32;
+      const mk = cnt => Musician.fromFormula(tr.f, { n:cnt, scale:tr.scale || 'major', span:tr.span || 2, base:tr.base == null ? 4 : tr.base, rhythm:tr.r, offset:offs[k] || 0 }).notes;
+      notes = mk(n); while(sumB(notes) < total - 1e-9 && n < 512){ n *= 2; notes = mk(n); }
+      notes = trunc(notes, total); used[k] = Math.min(n, notes.length);
+    }
+    if(tr.voice === 'wave') Musician.compileFormula(tr.wave || '0');
+    tr._err = ''; return trunc(notes, total);
+  } catch(e){ tr._err = e.message; return [[null, total]]; }
+}
+const expandNow = () => Composer.expand(st, C, gen);
+
 /* ── 播放 ── */
-const done = () => { playing = false; markNow(-1); };
-function replay(){ if(playing) Musician.play(Composer.expand(st, C), { cfg:CONFIG, onend:done }); }
-$('play').onclick = () => { tutNote('play'); playing = true; Musician.play(Composer.expand(st, C), { cfg:CONFIG, onend:done }); };
+let lastTune = null;
+const done = () => { playing = false; markNow(-1); paintNow(-1); };
+function playNow(){
+  lastTune = expandNow(); buildNow(lastTune); playing = true;
+  Musician.play(lastTune, { cfg:CONFIG, onend:() => {
+    const m = $('after').value;
+    if(!playing || m === 'once'){ done(); return; }
+    if(m === 'continue'){ chunk++; for(const k in used) offs[k] = (offs[k] || 0) + used[k]; }   // 公式軌從上一段結尾往下算；積木軌照原樣重複
+    playNow();
+  } });
+}
+function startPlay(){ chunk = 0; offs = {}; playNow(); }
+function replay(){ if(playing) playNow(); }
+$('play').onclick = () => { tutNote('play'); startPlay(); };
 $('stop').onclick = () => { Musician.stop(); done(); };
 function preview(block, chordId, tr){          // 點積木試聽：一小節
   const one = { bars:1, bpm:st.bpm, chords:[chordId], tracks:[{...tr, mute:false, solo:false, vol:1, blocks:[block]}] };
-  playing = false; Musician.play(Composer.expand(one, C), { cfg:CONFIG });
+  playing = false; Musician.play(Composer.expand(one, C, gen), { cfg:CONFIG });
 }
 
 /* ── 畫面 ── */
 function render(){
   const g = $('grid'), B = st.bars;
-  g.style.gridTemplateColumns = `var(--hdrW) repeat(${B}, minmax(84px,1fr))`;
+  g.style.gridTemplateColumns = `var(--hdrW) repeat(${B}, minmax(84px,1fr))`; g.style.setProperty('--rows', st.tracks.length + 1);
   g.innerHTML = '';
   const el = (cls, html) => { const d = document.createElement('div'); d.className = cls; if(html != null) d.innerHTML = html; g.appendChild(d); return d; };
   el('ruler', '');
@@ -204,11 +261,14 @@ function render(){
       '<div class="row"><select>' + voiceOpts(tr.voice) + '</select>' +
       '<input type="range" min="0" max="1" step="0.05" value="' + tr.vol + '"></div>';
     h.querySelector('.nm').onchange = e => { tr.name = e.target.value; save(); };
-    h.querySelector('select').onchange = e => { tr.voice = e.target.value; save(); replay(); };
+    h.querySelector('select').onchange = e => { tr.voice = e.target.value; if(tr.voice === 'wave' && !tr.wave) tr.wave = 'sin(2*pi*f*t)*exp(-t*4)'; save(); render(); replay(); };
     h.querySelector('input[type=range]').oninput = e => { tr.vol = +e.target.value; Musician.setPart(i, { vol:tr.vol }); save(); };
     h.querySelector('.m').onclick = () => { tr.mute = !tr.mute; Musician.setPart(i, { mute:tr.mute }); save(); render(); tutNote('mute'); };
     h.querySelector('.s').onclick = () => { tr.solo = !tr.solo; Musician.setPart(i, { solo:tr.solo }); save(); render(); tutNote('mute'); };
-    if(tr.kind === 'jp'){           // 簡譜軌：整列一格，顯示簡譜原文
+    if(tr.kind === 'formula' || tr.kind === 'pulse'){   // 公式軌：整列一格，顯示公式原文（編輯在左欄）
+      const c = el('cell jpcell' + (sel.row === i ? ' sel' : ''), (tr.kind === 'pulse' ? '◉' : '∑') + ' <small>' + (tr.f || '').replace(/</g, '&lt;').slice(0, 120) + '</small>' + (tr._err ? ' <small style="color:var(--bad)">⚠ ' + tr._err.replace(/</g, '&lt;') + '</small>' : ''));
+      c.style.gridColumn = 'span ' + B; c.onclick = () => { sel = { row:i, bar:0 }; render(); };
+    } else if(tr.kind === 'jp'){           // 簡譜軌：整列一格，顯示簡譜原文
       const c = el('cell jpcell' + (sel.row === i ? ' sel' : ''), '📝 <small>' + (tr.jp || '').replace(/</g, '&lt;').slice(0, 120) + '</small>');
       c.style.gridColumn = 'span ' + B; c.onclick = () => { sel = { row:i, bar:0 }; render(); };
     } else for(let b = 0; b < B; b++) cell(i, b, tr.blocks[b]);
@@ -229,7 +289,7 @@ function render(){
 /* 左欄：依選中的格子換內容。模式跟著選取走，不需要自己切分頁 */
 function side(){
   const p = $('pal'), m = mode(), tr = trOf(), n = sel.bar + 1; p.innerHTML = '';
-  $('step').textContent = m === 'chord' ? `② 選和弦 → 第 ${n} 小節` : m === 'pat' ? `② 選彈法 → ${tr.name}・第 ${n} 小節` : m === 'jp' ? `② 編輯簡譜軌 → ${tr.name}` : `② 點格子排旋律 → 第 ${n} 小節`;
+  $('step').textContent = m === 'formula' ? TEXT['fx.step'](tr.name) : m === 'chord' ? `② 選和弦 → 第 ${n} 小節` : m === 'pat' ? `② 選彈法 → ${tr.name}・第 ${n} 小節` : m === 'jp' ? `② 編輯簡譜軌 → ${tr.name}` : `② 點格子排旋律 → 第 ${n} 小節`;
   if(m === 'chord'){
     const d = document.createElement('div'); d.className = 'blocks';
     C.chords.forEach(c => { const b = document.createElement('button'); b.className = 'blk chord'; b.textContent = c.name;
@@ -243,7 +303,8 @@ function side(){
         b.innerHTML = x.emoji + '<br>' + x.name; b.onclick = () => put(x.id); d.appendChild(b); });
       p.appendChild(d);
     });
-  } else if(m === 'jp') jpPanel(p, tr);
+  } else if(m === 'formula') formulaPanel(p, tr);
+  else if(m === 'jp') jpPanel(p, tr);
   else { melodyGrid(p, tr); jpInput(p, tr); }
 }
 function melodyGrid(p, tr){
@@ -278,13 +339,78 @@ function put(id){                       // 把積木放進選中的格子，試�
 function jpFoot(){
   const i = Math.max(0, sel.row);
   $('jpName').textContent = st.tracks[i].name;
-  $('jp').value = Composer.jianpu(Composer.expand(st, C).parts[i].notes);
+  $('jp').value = Composer.jianpu(expandNow().parts[i].notes);
 }
 /* 播放線：Musician.position() 換算成第幾小節，亮那一欄 */
 let lastNow = -2;
 function markNow(b){ if(b === lastNow) return; lastNow = b;
   document.querySelectorAll('[data-bar]').forEach(e => e.classList.toggle('now', +e.dataset.bar === b)); }
-(function tick(){ const p = Musician.position(); markNow(p < 0 ? -1 : Math.floor(p / (240 / st.bpm))); requestAnimationFrame(tick); })();
+(function tick(){ const p = Musician.position(); markNow(p < 0 ? -1 : Math.floor(p / (240 / st.bpm))); paintNow(p); requestAnimationFrame(tick); })();
+
+/* ── 公式軌面板（階段 3）：公式、時值、音階、八度、彈跳、鐘形、波形算式；Enter／離開欄位才重播 ── */
+function formulaPanel(p, tr){
+  const w = document.createElement('div'); w.className = 'fxp';
+  const pulse = tr.kind === 'pulse', esc = x => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const lab = (k, key, val, type = 'text', extra = '') => `<label>${TEXT[key]}<input type="${type}" data-k="${k}" value="${esc(val)}" ${extra}></label>`;
+  w.innerHTML = '<div class="grp">' + TEXT[pulse ? 'fx.pTrack' : 'fx.fTrack'] + '</div>' +
+    lab('f', pulse ? 'fx.f2' : 'fx.f1', tr.f) + (pulse ? '' : lab('r', 'fx.r', tr.r)) +
+    '<div class="two">' + (pulse ? lab('cyc', 'fx.cyc', tr.cyc || 16, 'number', 'min="1" max="64"') : '<label>' + TEXT['fx.scale'] + '<select data-k="scale">' +
+      ['major', 'minor', 'pentatonic', 'chromatic'].map(x => `<option value="${x}"${(tr.scale || 'major') === x ? ' selected' : ''}>${TEXT['fx.' + x]}</option>`).join('') + '</select></label>') +
+    (pulse ? lab('base', 'fx.base', tr.base == null ? 2 : tr.base, 'number', 'min="0" max="7"') : lab('span', 'fx.span', tr.span || 2, 'number', 'min="1" max="4"')) + '</div>' +
+    (pulse ? '' : '<div class="two">' + lab('base', 'fx.base', tr.base == null ? 4 : tr.base, 'number', 'min="0" max="7"') + '<span></span></div>') +
+    '<div class="two">' + lab('bounce', 'fx.bounce', tr.bounce || 0, 'number', 'min="0" max="3" step="0.5"') + lab('bell', 'fx.bell', tr.bell || 0, 'number', 'min="0" max="1" step="0.05"') + '</div>' +
+    (tr.voice === 'wave' ? lab('wave', 'fx.wave', tr.wave) : '') +
+    '<div class="err" id="fxErr"></div><button class="del">' + TEXT['fx.del'] + '</button>';
+  const check = () => { const el = w.querySelector('#fxErr'); el.textContent = '';
+    for(const k of ['f', 'r', 'wave']){ const i = w.querySelector('[data-k="' + k + '"]'); if(i && i.value.trim()){ try { Musician.compileFormula(i.value); } catch(e){ el.textContent = e.message; return false; } } }
+    return true; };
+  w.querySelectorAll('[data-k]').forEach(i => {
+    i.oninput = check;
+    i.onchange = () => { if(!check()) return; tr[i.dataset.k] = i.type === 'number' ? +i.value : i.value; save(); render(); replay(); };
+  });
+  w.querySelector('.del').onclick = () => { st.tracks.splice(sel.row, 1); sel = { row:-1, bar:0 }; save(); render(); replay(); };
+  p.appendChild(w); check();
+}
+function addTrack(tr){
+  if(st.tracks.length >= 12) return say('最多 12 軌');
+  st.tracks.push(Object.assign({ pan:0, mute:false, solo:false, vol:0.8, blocks:[], oct:4 }, tr));
+  sel = { row:st.tracks.length - 1, bar:0 }; save(); render();
+}
+$('addF').onclick = () => { addTrack({ name:'公式軌', kind:'formula', voice:'piano', f:'floor(7*frac(n*phi))', r:'', base:4 }); startPlay(); };
+$('addP').onclick = () => { addTrack({ name:'脈衝軌', kind:'pulse', voice:'kick', f:'1+mod(b,4)', cyc:16, base:2 }); startPlay(); };
+
+/* ── 公式圖鑑：經典公式（加成一軌）＋影片重現（換整首，先問） ── */
+{ const body = $('atlasBody'), groups = {};
+  CLASSICS.forEach((c, i) => (groups[c.g] = groups[c.g] || []).push([c, i]));
+  body.innerHTML = '<div class="ag">' + TEXT['fx.classics'] + '</div>' + Object.keys(groups).map(g => '<div class="ag">' + g + '</div><div class="chips">' +
+    groups[g].map(([c, i]) => '<button data-c="' + i + '" title="' + (c.f || c.w).replace(/"/g, '&quot;') + (c.note ? '　' + c.note : '') + '">' + c.name + '</button>').join('') + '</div>').join('') +
+    '<div class="ag">' + TEXT['fx.video'] + '</div><div class="chips">' + VIDEO.map((v, i) => '<button data-v="' + i + '">' + v.name + '</button>').join('') + '</div><div id="vinfo"></div>';
+  const trackOf = c => c.kind === 'pitch' ? { name:c.name, kind:'formula', voice:'piano', f:c.f, r:'', base:4 }
+    : c.kind === 'pulse' ? { name:c.name, kind:'pulse', voice:'kick', f:c.f, cyc:16, base:2, vol:0.9 }
+    : { name:c.name, kind:'formula', voice:'wave', f:'2*floor(3*frac(n*phi))', r:'1', base:3, wave:c.w };
+  body.onclick = e => { const b = e.target.closest('button'); if(!b) return;
+    if(b.dataset.c != null){ addTrack(trackOf(CLASSICS[b.dataset.c])); startPlay(); return; }
+    const v = VIDEO[b.dataset.v];
+    if(!confirm(TEXT['fx.replaceAsk'](v.name))) return;
+    st = { name:'影片重現：' + v.name, bpm:v.bpm, bars:8, chords:Array(8).fill(null),
+      tracks:v.tracks.map(t => Object.assign({ pan:0, mute:false, solo:false, vol:0.8, blocks:[], oct:4, kind:t.kind || 'formula' }, JSON.parse(JSON.stringify(t)), { kind:t.kind || 'formula' })) };
+    sel = { row:0, bar:0 }; save(); render();
+    $('vinfo').innerHTML = '<b>“' + v.caption + '”</b><br><code>' + v.shown.replace(/</g, '&lt;') + '</code><br>' + v.note;
+    startPlay(); };
+}
+
+/* ── 目前音：每一軌正在發的音名；進度由 Musician.position() 換算成拍 ── */
+function buildNow(tune){ nowParts = tune.parts.map((p, i) => { let t = 0; const at = [], nm = []; for(const n of p.notes){ at.push(t); nm.push(n[0]); t += n[1]; } return { name:p.name, at, nm, mute:p.mute, i:0, c:'var(--lane' + (i % 6 + 1) + ')' }; }); }
+function paintNow(pos){
+  const el = $('nowline'); let h = '';
+  if(pos >= 0 && nowParts){
+    const beat = pos / (60 / lastTune.bpm);
+    h = nowParts.map(q => { if(beat < q.at[q.i]) q.i = 0; while(q.i + 1 < q.at.length && q.at[q.i + 1] <= beat) q.i++;
+      return '<span style="color:' + q.c + (q.mute ? ';opacity:.4' : '') + '">' + q.name + ' ' + (q.nm[q.i] || '·') + '</span>'; }).join('') +
+      '<span style="color:var(--muted)">第 ' + (chunk + 1) + ' 段・第 ' + (Math.floor(beat / 4) + 1) + ' 小節・第 ' + (Math.floor(beat % 4) + 1) + ' 拍</span>';
+  }
+  if(h !== nowHtml){ nowHtml = h; el.innerHTML = h; }
+}
 
 /* ── 工具 ── */
 $('bpm').onchange = e => { st.bpm = Math.max(40, Math.min(240, +e.target.value || C.bpm)); save(); replay(); };
@@ -293,7 +419,7 @@ $('delBars').onclick = () => resize(Math.max(4, st.bars - 4));
 function resize(n){ const fit = (a, v) => Array.from({ length:n }, (_, i) => i < a.length ? a[i] : v);
   st.chords = fit(st.chords, null); st.tracks.forEach(t => t.blocks = fit(t.blocks, null));
   st.bars = n; sel.bar = Math.min(sel.bar, n - 1); save(); render(); replay(); }
-$('example').onclick = () => { st = example(); sel = { row:-1, bar:0 }; save(); render(); replay(); };
+$('example').onclick = () => { offs = {}; chunk = 0; st = example(); sel = { row:-1, bar:0 }; save(); render(); replay(); };
 const copyOf = v => Array.isArray(v) ? v.slice() : v;
 $('clear').onclick = () => { if(sel.row === -1) st.chords[sel.bar] = null; else trOf().blocks[sel.bar] = null; save(); render(); replay(); };
 $('fill').onclick = () => { const a = sel.row === -1 ? st.chords : trOf().blocks, v = a[sel.bar];
@@ -313,7 +439,7 @@ $('trLoad').onclick = () => { if(sel.row < 0) return say('先點要放進哪一�
     Object.assign(tr, { name:p.name, voice:p.voice, oct:p.oct, vol:p.vol, pan:p.pan });
     tr.blocks = Array.from({ length:st.bars }, (_, k) => copyOf(p.blocks[k]) || null); save(); render(); replay(); }); };
 $('exportJs').onclick = () => {
-  const js = 'const MY_TUNE = ' + JSON.stringify(Composer.expand(st, C)) + ';\n// 遊戲裡：Musician.play(MY_TUNE, { cfg:CONFIG })（需要 musician.js 與 CONFIG.voices）';
+  const js = 'const MY_TUNE = ' + JSON.stringify(Composer.expand(st, C, gen)) + ';\n// 遊戲裡：Musician.play(MY_TUNE, { cfg:CONFIG })（需要 musician.js 與 CONFIG.voices）';
   (navigator.clipboard ? navigator.clipboard.writeText(js) : Promise.reject()).then(() => say(TEXT['cp.exported']), () => { prompt('複製這段：', js); });
 };
 /* ── 新手教學：七步，每步高亮一個東西，做對動作就自動下一步；第一次來自動開 ── */
@@ -462,7 +588,7 @@ function fillFromJianpu(tr, text){
   if(need > st.bars) resize(Math.min(C.maxBars, Math.ceil(need / 4) * 4));
   r.bars.forEach((v, i) => { if(sel.bar + i < st.bars) tr.blocks[sel.bar + i] = v; });
   if(need > C.maxBars) say('超過 ' + C.maxBars + ' 小節的部分沒放進去');
-  save(); render(); if(playing) replay(); else Musician.play(Composer.expand({ ...st, tracks:[{ ...tr, mute:false, solo:false }] }, C), { cfg:CONFIG });
+  save(); render(); if(playing) replay(); else Musician.play(Composer.expand({ ...st, tracks:[{ ...tr, mute:false, solo:false }] }, C, gen), { cfg:CONFIG });
 }
 /* 從試聽台「在創作台打開」帶過來的多聲部作品：放得進格子的軌變旋律軌，放不進的變簡譜軌 */
 function importTune(t){

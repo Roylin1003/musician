@@ -72,13 +72,23 @@ const Composer = (() => {
     return pat(ch.q.map(i => r+i));
   }
 
-  function expand(st, C){
+  /* gen(tr, 總拍數, 軌索引) → notes：公式軌（kind:'formula'｜'pulse'）由呼叫端提供的產生器算（公式引擎在 musician.js，
+     這支檔保持純邏輯、node 可測）；沒給 gen 就休止整首。part.P＝這一軌專屬的音色覆蓋（彈跳／鐘形／波形算式） */
+  function expand(st, C, gen){
+    const total = st.bars * 4;
     return { id:'composer', name:st.name||'我的配樂', composer:'Master Roy', bpm:st.bpm||C.bpm,
-      parts: st.tracks.map(tr => ({
-        name:tr.name, voice:tr.voice, vol:tr.vol, pan:tr.pan, mute:!!tr.mute, solo:!!tr.solo,
-        notes: tr.kind === 'jp' ? tr.notes : [].concat(...Array.from({length:st.bars}, (_, i) =>
-          tr.kind === 'melody' ? melodyBar(tr.blocks[i], tr.oct, C) : barNotes(tr.blocks[i], st.chords[i], tr.oct, C))),
-      })) };
+      parts: st.tracks.map((tr, k) => {
+        const part = { name:tr.name, voice:tr.voice, vol:tr.vol, pan:tr.pan, mute:!!tr.mute, solo:!!tr.solo };
+        if(tr.kind === 'formula' || tr.kind === 'pulse'){
+          part.notes = gen ? gen(tr, total, k) : [[null, total]];
+          const P = {}; if(tr.bounce > 0) P.bounce = tr.bounce; if(tr.bell > 0) P.bell = tr.bell; if(tr.voice === 'wave' && tr.wave) P.expr = tr.wave;
+          if(Object.keys(P).length) part.P = P;
+          return part;
+        }
+        part.notes = tr.kind === 'jp' ? tr.notes : [].concat(...Array.from({length:st.bars}, (_, i) =>
+          tr.kind === 'melody' ? melodyBar(tr.blocks[i], tr.oct, C) : barNotes(tr.blocks[i], st.chords[i], tr.oct, C)));
+        return part;
+      }) };
   }
 
   // notes → 簡譜字串（顯示用；與引擎 fromJianpu 語法相容，C 大調音級，base＝第 4 八度）

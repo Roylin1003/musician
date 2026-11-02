@@ -18,7 +18,6 @@
     el.className='mnav';
     var a=function(href,txt,on){ return '<a href="'+href+'"'+(on?' class="on"':'')+'>'+txt+'</a>'; };
     el.innerHTML=a('index.html',T('nav.listen','聽'),page==='listen')+a('composer.html',T('nav.make','做'),make)+
-      (make?'<span class="msub">'+a('composer.html',T('nav.brick','積木'),page==='brick')+a('formula.html',T('nav.formula','公式'),page==='formula')+'</span>':'')+
       '<button id="mpal" type="button" title="換色票"></button>';
     document.getElementById('mpal').onclick=function(){ set(LIST[(LIST.indexOf(get())+1)%LIST.length]); };
     paint(get());
