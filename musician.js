@@ -60,7 +60,11 @@ const Musician = (() => {
              guzheng:{gain:0.55,decay:2.6,bright:0.45,vibDelay:0.25,vibRate:5.5,vibDepth:18},
              fm:{gain:0.22,attack:0.004,release:0.08,ratio:2,iStart:5,iEnd:0.6,tau:0.12},
              folder:{gain:0.22,attack:0.004,release:0.08,gStart:6,gEnd:1.2,tau:0.15},
-             monster:{gain:0.12,attack:0.006,release:0.10,layers:4,ratio:3,amp:0.55} },
+             monster:{gain:0.12,attack:0.006,release:0.10,layers:4,ratio:3,amp:0.55},
+             bounce:{gain:0.5,attack:0.004,bounce:1,bounceTau:0.09},
+             kick:{gain:0.8,drop:3,dropTime:0.05,decay:0.35},
+             hat:{gain:0.25,cutoff:7000,decay:0.05},
+             wave:{gain:0.3,expr:'sin(2*pi*f*t)*exp(-t*4)'} },
     chord: { root:0.30, triad:0.13, attack:0.18 },
   };
 
@@ -263,6 +267,7 @@ const Musician = (() => {
       mg.gain.setValueAtTime(hz*P.ratio*P.iStart,t);           // 頻率偏移＝I·調變頻率
       mg.gain.setTargetAtTime(hz*P.ratio*P.iEnd,t,P.tau);
       m.connect(mg); mg.connect(c.frequency);
+      applyBounce(c,hz,1,t,dur,P); applyBounce(m,hz,P.ratio,t,dur,P);
       shapeEnv(c,out,t,dur,P);
       m.start(t); m.stop(t+dur+0.05);
     },
@@ -273,6 +278,7 @@ const Musician = (() => {
       pre.gain.setValueAtTime(P.gStart/FOLD_MAX,t);
       pre.gain.setTargetAtTime(P.gEnd/FOLD_MAX,t,P.tau);
       o.connect(pre); pre.connect(sh);
+      applyBounce(o,hz,1,t,dur,P);
       shapeEnv(sh,out,t,dur,P,o);
     },
     /* monster：魏爾斯特拉斯 W=Σ aⁿ·cos(ratioⁿ·πx)——頻率每層乘 ratio、振幅每層乘 a，高到 12kHz 為止 */
@@ -281,19 +287,75 @@ const Musician = (() => {
       for(let n=0;n<P.layers;n++,a*=P.amp){
         const f=hz*Math.pow(P.ratio,n); if(f>12000) break;
         const o=actx.createOscillator(), g=actx.createGain();
-        o.type='sine'; o.frequency.value=f; g.gain.value=a;
+        o.type='sine'; o.frequency.value=f; g.gain.value=a; applyBounce(o,hz,Math.pow(P.ratio,n),t,dur,P);
         o.connect(g); g.connect(mix); o.start(t); o.stop(t+dur+0.05);
       }
       shapeEnv(mix,out,t,dur,P);
     },
+    /* bounce（彈跳低音）：正弦＋音高彈跳＋指數衰減——影片 3 號 f(t)=f_k·2^{−e^{−(t−t_k)/τ}}（bounce=1、bounceTau=τ） */
+    bounce(hz,t,dur,out,P){
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.value=hz; applyBounce(o,hz,1,t,dur,P);
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(P.gain,t+P.attack);
+      g.gain.exponentialRampToValueAtTime(0.0008,t+Math.max(dur,P.attack+0.05));
+      o.connect(g); g.connect(out); o.start(t); o.stop(t+Math.max(dur,P.attack+0.05)+0.05);
+    },
+    /* kick（調音脈衝鼓）：正弦從 drop 倍音高滑到本音，衰減自己管、不跟音符長度走——影片 2 號「每個脈衝都是一顆調過音的鼓」 */
+    kick(hz,t,dur,out,P){
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(hz*P.drop,t); o.frequency.exponentialRampToValueAtTime(hz,t+P.dropTime);
+      g.gain.setValueAtTime(P.gain,t); g.gain.exponentialRampToValueAtTime(0.0008,t+P.decay);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t+P.decay+0.05);
+    },
+    // hat（嗆）：高通噪音短爆——脈衝軌的正反拍細碎節奏用
+    hat(hz,t,dur,out,P){
+      if(!noiseBuf){ noiseBuf=actx.createBuffer(1,Math.floor(actx.sampleRate*0.06),actx.sampleRate);
+        const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; }
+      const n=actx.createBufferSource(), hp=actx.createBiquadFilter(), g=actx.createGain();
+      n.buffer=noiseBuf; hp.type='highpass'; hp.frequency.value=P.cutoff;
+      g.gain.setValueAtTime(P.gain,t); g.gain.exponentialRampToValueAtTime(0.0008,t+P.decay);
+      n.connect(hp); hp.connect(g); g.connect(out); n.start(t);
+    },
+    /* wave（波形公式）：P.expr 是一條 t（秒）與 f（本音 Hz）的算式，逐取樣算成波形再播——y(t)=sin(2πft+I(t)sin(4πft)) 照寫就響。
+       自帶起音 2ms／收音 20ms 防爆音；音量夾在 ±1（tanh 軟削）。同音高同音長快取。
+       ponytail: 一顆音最長算 1.5 秒、每取樣 sum 預算 64 次迭代；長曲全用 wave 音色會吃 CPU，要更省就搬進 AudioWorklet */
+    wave(hz,t,dur,out,P){
+      const key=P.expr+'|'+hz.toFixed(2)+'|'+dur.toFixed(3);
+      let buf=waveCache.get(key);
+      if(!buf){
+        let ev; try{ ev=P._ev||(P._ev=compileFormula(P.expr,{budget:64})); }catch(e){ return; }
+        const sr=actx.sampleRate, len=Math.max(8,Math.floor(Math.min(dur+0.05,1.5)*sr)), env={f:hz,dur:dur,t:0};
+        buf=actx.createBuffer(1,len,sr); const d=buf.getChannelData(0), a=Math.floor(sr*0.002), r=Math.floor(sr*0.02);
+        for(let i=0;i<len;i++){ env.t=i/sr; let y=ev(env); if(!Number.isFinite(y)) y=0;
+          y=Math.tanh(y); if(i<a) y*=i/a; if(i>len-r) y*=(len-i)/r; d[i]=y; }
+        if(waveCache.size>64) waveCache.clear(); waveCache.set(key,buf);
+      }
+      const src=actx.createBufferSource(), g=actx.createGain(); src.buffer=buf; g.gain.value=P.gain;
+      src.connect(g); g.connect(out); src.start(t);
+    },
   };
+  const waveCache=new Map();
   // 函數音色共用包絡：attack 線性起音、到音尾前 release 放掉；src 是要接上包絡的節點（振盪器要順便 start）
   function shapeEnv(src,out,t,dur,P,startNode){
     const g=actx.createGain(), rel=Math.min(P.release,dur*0.5), peak=P.gain;
-    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(peak,t+P.attack);
-    g.gain.setValueAtTime(peak,Math.max(t+P.attack,t+dur-rel)); g.gain.linearRampToValueAtTime(0,t+dur);
+    if(P.bell>0){        // 高斯包絡：g(t)=e^{−((t−dur/2)/σ)²}，σ＝bell×音長——整顆音沿鐘形曲線漲落，沒有尖起音
+      const N=48, c=new Float32Array(N), sg=P.bell*dur;
+      for(let i=0;i<N;i++){ const x=(i/(N-1)-0.5)*dur; c[i]=peak*Math.exp(-(x*x)/(sg*sg)); }
+      c[0]=0; c[N-1]=0; g.gain.setValueCurveAtTime(c,t,dur);
+    } else {
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(peak,t+P.attack);
+      g.gain.setValueAtTime(peak,Math.max(t+P.attack,t+dur-rel)); g.gain.linearRampToValueAtTime(0,t+dur);
+    }
     src.connect(g); g.connect(out);
     const s=startNode||src; if(s.start){ s.start(t); s.stop(t+dur+0.05); }
+  }
+  /* 音高彈跳：f(t)=f_k·2^{−bounce·e^{−t/bounceTau}}——音一出來低 bounce 個八度，指數地爬回本音（808 低音那一下「咚—嗡」）。
+     bounce=0 不動；osc 是振盪器、mult 是它相對基頻的倍率（調變器 ratio、monster 各層 ratio^n） */
+  function applyBounce(osc,hz,mult,t,dur,P){
+    if(!(P.bounce>0)) return;
+    const N=32, c=new Float32Array(N), tau=P.bounceTau||0.08;
+    for(let i=0;i<N;i++) c[i]=hz*mult*Math.pow(2,-P.bounce*Math.exp(-(i/(N-1)*dur)/tau));
+    osc.frequency.setValueCurveAtTime(c,t,dur);
   }
   const FOLD_MAX=8; let foldC=null;   // WaveShaper 只吃 [-1,1]：把 u=g·sinφ 的範圍 [-8,8] 壓進去，pre 增益＝g/8
   function foldCurve(){
@@ -430,7 +492,7 @@ const Musician = (() => {
     master.connect(ensureLimiter());
     const events=[]; let total=0, tail=0;
     partBus=tune.parts.map((p,i)=>{
-      const v=VOICES[p.voice]?p.voice:'piano', P=(cfg.voices&&cfg.voices[v])||FALLBACK.voices[v];
+      const v=VOICES[p.voice]?p.voice:'piano', P=Object.assign({},(cfg.voices&&cfg.voices[v])||FALLBACK.voices[v],p.P);   // p.P＝這一軌專屬覆蓋（如 wave 的算式）
       const g=actx.createGain(); let out=g;
       if(actx.createStereoPanner){ const pn=actx.createStereoPanner(); pn.pan.value=p.pan||0; g.connect(pn); pn.connect(master); }
       else g.connect(master);
@@ -673,11 +735,11 @@ const Musician = (() => {
     mod:(a,b)=>a-b*Math.floor(a/b),          // 數學的 mod：結果跟除數同號（負數也不翻車）
   };
   const FORMULA_CONST = { pi:Math.PI, tau:2*Math.PI, e:Math.E, phi:(1+Math.sqrt(5))/2 };
-  function compileFormula(text){
+  function compileFormula(text, copt={}){
     const src=String(text).replace(/π/g,'pi').replace(/φ/g,'phi').replace(/τ/g,'tau').replace(/[·×]/g,'*').replace(/−/g,'-').replace(/\s+/g,'').toLowerCase();
     if(!src) throw new Error('公式是空的');
     if(src.length>300) throw new Error('公式太長（上限 300 字）');
-    let p=0, sumBudget=20000;
+    let p=0, sumBudget=copt.budget||20000;
     const peek=()=>src[p];
     const fail=m=>{ throw new Error(m+'（第 '+(p+1)+' 個字附近）'); };
     function expr(){ let a=term(); while(peek()==='+'||peek()==='-'){ const op=src[p++], b=term(), l=a; a=op==='+'?env=>l(env)+b(env):env=>l(env)-b(env); } return a; }
@@ -713,7 +775,8 @@ const Musician = (() => {
       return env=>{ const v=Object.prototype.hasOwnProperty.call(env,name)?env[name]:NaN; return v; };   // 沒宣告的名字＝NaN＝休止
     }
     const tree=expr(); if(p<src.length) fail('多出來的字「'+src[p]+'」');
-    return env=>{ sumBudget=20000; return tree(env); };
+    const B0=copt.budget||20000;
+    return env=>{ sumBudget=B0; return tree(env); };
   }
   const SCALES={ major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pentatonic:[0,2,4,7,9], chromatic:[0,1,2,3,4,5,6,7,8,9,10,11] };
   function fromFormula(text, opts={}){
@@ -723,7 +786,7 @@ const Musician = (() => {
     const base=opts.base==null?4:opts.base, NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
     const notes=[];
     for(let n=0;n<count;n++){
-      const env={n}, d=Math.round(pitch(env)), r=rhythm({n});
+      const env={n,x:n/count}, d=Math.round(pitch(env)), r=rhythm({n,x:n/count});
       const beats=Number.isFinite(r)?Math.min(4,Math.max(0.5,Math.round(r*2)/2)):1;
       if(!Number.isFinite(d)){ notes.push([null,beats]); continue; }
       const m=((d%(2*R))+2*R)%(2*R), deg=m<R?m:2*R-1-m;          // 鏡射折回 [0,R)
@@ -731,6 +794,18 @@ const Musician = (() => {
       notes.push([NAMES[k]+(Math.floor(midi/12)-1), beats]);
     }
     return { id:'formula', name:opts.name||'公式', composer:opts.composer||'公式作曲', bpm:opts.bpm||120, chords:false, notes };
+  }
+
+  /* 脈衝公式：fromPulse('1+floor(3*x)', {beats:16, pitch:'C2'})——b 是第幾拍、x＝b/beats（0→1），算出「這一拍打幾下」（0–8），
+     打 r 下就把一拍切 r 等份（影片 2 號「每拍 r＝1,2,3,4 下」）。pitch 是脈衝的本音（調過音的鼓）。
+     指數爬升＝把 r 寫成 x 的指數函數：1+floor(7*(exp(3*x)-1)/(exp(3)-1)) */
+  function fromPulse(text, opts={}){
+    const ev=compileFormula(text), B=Math.max(1,Math.min(256,Math.floor(opts.beats||16))), notes=[], pitch=opts.pitch||'C2';
+    for(let b=0;b<B;b++){
+      const v=ev({b,n:b,x:b/B}), r=Number.isFinite(v)?Math.max(0,Math.min(8,Math.round(v))):0;
+      if(r<1) notes.push([null,1]); else for(let i=0;i<r;i++) notes.push([pitch,1/r]);
+    }
+    return { id:'pulse', name:opts.name||'脈衝', composer:'公式作曲', bpm:opts.bpm||120, chords:false, notes };
   }
 
   /* tune → 簡譜 token（v1.11.00，Roy：「播放的時候下面就顯示簡譜」）。
@@ -773,7 +848,7 @@ const Musician = (() => {
     return p>curLen+0.5 ? -1 : Math.max(0,p);
   }
 
-  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, fromFormula, toJianpu, position,
+  return { play, stop, setPart, setSamples, noteNow, noteHz, fromJianpu, fromFormula, fromPulse, compileFormula, toJianpu, position,
            setMuted, get muted(){ return userMuted; },
            tail:()=>curTail,   // 上一次播放算出的尾音緩衝（秒）——自檢台用它守這條回歸
            get voices(){ return Object.keys(VOICES); },

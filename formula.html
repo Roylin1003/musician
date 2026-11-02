@@ -9,44 +9,46 @@
   *{box-sizing:border-box; margin:0; padding:0;}
   body{background:var(--bg); color:var(--text); font:18px/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif; padding:16px; display:flex; flex-direction:column; align-items:center; gap:14px; min-height:100vh;}
   button,select,input{font:inherit; color:inherit;}
-  button,select{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 16px; cursor:pointer; min-height:44px;}
+  button,select{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px 14px; cursor:pointer; min-height:44px;}
   button:hover{border-color:var(--blue);}
-  header{width:min(1100px,100%); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;}
+  header{width:min(1500px,100%); display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;}
   h1{font-size:28px; color:var(--gold); letter-spacing:2px;}
   header a{color:var(--muted); font-size:16px; text-decoration:none;}
-  main{width:min(1100px,100%); display:grid; grid-template-columns:1fr; gap:14px;}
-  @media(min-width:1000px){ main{grid-template-columns:minmax(420px,5fr) 6fr;} }
+  main{width:min(1500px,100%); display:grid; grid-template-columns:1fr; gap:14px;}
+  @media(min-width:1000px){ main{grid-template-columns:minmax(520px,6fr) 5fr; align-items:start;} }
   .box{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;}
-  label.f{color:var(--muted); font-size:16px; display:flex; flex-direction:column; gap:4px;}
-  input[type=text]{width:100%; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-family:Consolas,"Courier New",monospace; font-size:20px; color:var(--gold);}
+  label.f{color:var(--muted); font-size:15px; display:flex; flex-direction:column; gap:4px;}
+  input[type=text]{width:100%; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-family:Consolas,"Courier New",monospace; font-size:18px; color:var(--gold);}
   input[type=text].bad{border-color:var(--bad);}
-  input[type=number]{width:84px; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold);}
-  .row{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;}
+  input[type=number]{width:76px; background:#10142a; border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; color:var(--gold); min-height:44px;}
+  .row{display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;}
   .chips{display:flex; flex-wrap:wrap; gap:8px;}
-  .chips button{font-size:16px; padding:6px 12px; min-height:44px;}
+  .chips button{font-size:16px; padding:6px 12px;}
   #err{color:var(--bad); min-height:1.5em; font-size:16px;}
-  #go{border-color:var(--gold); color:var(--gold); padding:8px 32px;}
-  #plot{width:100%; height:clamp(220px,38vh,460px); background:#10142a; border:1px solid var(--line); border-radius:12px; display:block;}
-  #names{color:var(--muted); font-size:16px; word-break:break-all;}
+  #go{border-color:var(--gold); color:var(--gold); padding:6px 32px;}
+  .trk{border:1px solid var(--line); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:8px; background:#141830;}
+  .trk .th{display:flex; gap:8px; align-items:center;}
+  .trk .th b{width:14px; height:14px; border-radius:50%; flex:none;}
+  .trk .th input.nm{flex:1; min-width:0; background:transparent; border:0; border-bottom:1px solid var(--line); color:var(--text); font-size:18px; padding:4px;}
+  .trk .th label{display:flex; gap:6px; align-items:center; color:var(--muted); font-size:15px;}
+  .trk .th input[type=checkbox]{width:22px; height:22px;}
+  .trk .th button.x{padding:2px 12px;}
+  #plot{width:100%; height:clamp(220px,40vh,520px); background:#10142a; border:1px solid var(--line); border-radius:12px; display:block;}
+  #names{color:var(--muted); font-size:15px; word-break:break-all; max-height:9em; overflow:auto;}
 </style>
 </head>
 <body>
 <header><h1>公式作曲台</h1><a href="index.html">← 音樂家</a><a href="composer.html">創作台</a></header>
 <main>
   <section class="box">
-    <label class="f">音高：n 是第幾顆音 → 算出音級（0＝主音）
-      <input type="text" id="fp" spellcheck="false" autocomplete="off" value="floor(7*frac(n*phi))">
-    </label>
-    <label class="f">時值（拍）：可留白＝每顆一拍
-      <input type="text" id="fr" spellcheck="false" autocomplete="off" placeholder="1">
-    </label>
-    <div class="row">
+    <div id="tracks" style="display:flex; flex-direction:column; gap:10px;"></div>
+    <div class="row"><button id="addTrk">＋ 加一軌</button>
       <label class="f">音數<input type="number" id="cnt" min="1" max="512" value="32"></label>
+      <label class="f">拍數（脈衝軌）<input type="number" id="beats" min="1" max="256" value="16"></label>
       <label class="f">速度<input type="number" id="bpm" min="40" max="240" value="120"></label>
       <label class="f">音階<select id="sc"><option value="major">大調</option><option value="minor">小調</option><option value="pentatonic">五聲</option><option value="chromatic">半音階</option></select></label>
       <label class="f">範圍（八度）<input type="number" id="span" min="1" max="4" value="2"></label>
     </div>
-    <label class="f">音色<select id="vo"></select></label>
     <div id="err"></div>
     <div class="row"><button id="go">▶ 演奏</button><button id="stop">■ 停止</button><button id="copy">複製連結</button></div>
     <div class="chips" id="presets"></div>
@@ -57,71 +59,119 @@
   </section>
 </main>
 
-<script src="config.js?v=1.24.01"></script>
-<script src="strings.zh.js?v=1.24.01"></script>
-<script src="musician.js?v=1.24.01"></script>
+<script src="config.js?v=1.25.00"></script>
+<script src="strings.zh.js?v=1.25.00"></script>
+<script src="musician.js?v=1.25.00"></script>
 <script>
 const $=id=>document.getElementById(id);
+const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];
+const VOICES=Musician.voices.filter(v=>!Musician.isSampled(v));
+/* 一軌＝{name, kind:'pitch'|'pulse', f 公式, r 時值公式（pitch）, voice, base 八度, vol, bounce, bell, wave 波形算式（voice=wave）, mute}
+   pitch：n → 音級（旋律／低音）；pulse：b（第幾拍）→ 這一拍打幾下（鼓點、爬升） */
+const T=(o)=>Object.assign({name:'旋律',kind:'pitch',f:'floor(7*frac(n*phi))',r:'',voice:'fm',base:4,vol:0.8,bounce:0,bell:0,wave:'',mute:false},o);
 const PRESETS=[
-  ['黃金比', 'floor(7*frac(n*phi))', ''],
-  ['正弦起伏', '7+7*sin(n/3)', ''],
-  ['平方餘數', 'mod(n*n,9)', ''],
-  ['圓周率', 'floor(10*frac(pi*n))', ''],
-  ['怪物（魏爾斯特拉斯）', '7+4*sum(k,0,3,cos(3^k*n)/2^k)', ''],
-  ['爬升加速', 'floor(n*n/6)', '2-n/16'],
-  ['三連音節奏', 'floor(5*frac(n*phi))', '1+mod(n,3)/2'],
+  ['黃金比（單軌）', {bpm:120,tracks:[T({})]}],
+  ['影片終局：怪物＋脈衝', {bpm:128,tracks:[
+    T({name:'鼓',kind:'pulse',f:'1+mod(b,4)',voice:'kick',base:2,vol:0.9}),
+    T({name:'低音',f:'floor(3*frac(n*phi))',r:'2',voice:'bounce',base:2,vol:0.9,bounce:1}),
+    T({name:'怪物',f:'floor(7*frac(n*phi))+2',r:'0.5',voice:'monster',base:4,vol:0.7,bell:0.3})]}],
+  ['指數爬升', {bpm:120,tracks:[
+    T({name:'鼓',kind:'pulse',f:'1+floor(7*(exp(3*x)-1)/(exp(3)-1))',voice:'kick',base:2,vol:0.8}),
+    T({name:'嗆',kind:'pulse',f:'floor(8*(exp(3*x)-1)/(exp(3)-1))',voice:'hat',base:6,vol:0.5}),
+    T({name:'升音',f:'floor(n/3)',r:'1',voice:'folder',base:4,vol:0.5,bell:0.35})]}],
+  ['hardbass 波形公式', {bpm:150,tracks:[
+    T({name:'鼓',kind:'pulse',f:'1',voice:'kick',base:2,vol:0.9}),
+    T({name:'咬音',f:'2*floor(3*frac(n*phi))',r:'1',voice:'wave',base:3,vol:0.8,wave:'sin(2*pi*f*t+(0.6+4.4*exp(-t*9))*sin(4*pi*f*t))*exp(-t*3)'})]}],
+  ['圓周率', {bpm:110,tracks:[T({f:'floor(10*frac(pi*n))',voice:'crystal',base:5,vol:0.7})]}],
 ];
-const FN_VOICES=Musician.voices.filter(v=>!Musician.isSampled(v));
-$('vo').innerHTML=FN_VOICES.map(v=>'<option value="'+v+'">'+(TEXT['ui.voice.'+v]||v)+'</option>').join('');
-$('vo').value='fm';
-$('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
-$('presets').onclick=e=>{ const b=e.target.closest('button'); if(!b)return; const p=PRESETS[b.dataset.i]; $('fp').value=p[1]; $('fr').value=p[2]; build(true); };
+let state=null, tune=null;
+const voiceOpts=sel=>VOICES.map(v=>'<option value="'+v+'"'+(v===sel?' selected':'')+'>'+(TEXT['ui.voice.'+v]||v)+'</option>').join('');
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
-let tune=null;
+function paintTracks(){
+  $('tracks').innerHTML=state.tracks.map((t,i)=>
+    '<div class="trk" data-i="'+i+'"><div class="th"><b style="background:'+COLORS[i%COLORS.length]+'"></b><input class="nm" data-k="name" value="'+esc(t.name)+'">'+
+    '<label><input type="checkbox" data-k="mute"'+(t.mute?' checked':'')+'>靜音</label><button class="x" title="刪除這軌">✕</button></div>'+
+    '<div class="row"><label class="f">類型<select data-k="kind"><option value="pitch"'+(t.kind==='pitch'?' selected':'')+'>音高公式 n→音級</option><option value="pulse"'+(t.kind==='pulse'?' selected':'')+'>脈衝公式 b→每拍幾下</option></select></label>'+
+    '<label class="f">音色<select data-k="voice">'+voiceOpts(t.voice)+'</select></label>'+
+    '<label class="f">八度<input type="number" data-k="base" min="0" max="7" value="'+t.base+'"></label>'+
+    '<label class="f">音量<input type="number" data-k="vol" min="0" max="1" step="0.1" value="'+t.vol+'"></label>'+
+    '<label class="f">彈跳<input type="number" data-k="bounce" min="0" max="3" step="0.5" value="'+t.bounce+'"></label>'+
+    '<label class="f">鐘形<input type="number" data-k="bell" min="0" max="1" step="0.05" value="'+t.bell+'"></label></div>'+
+    '<label class="f">'+(t.kind==='pulse'?'每拍打幾下（b＝第幾拍，x＝b/拍數）':'音級（n＝第幾顆音，x＝n/音數）')+'<input type="text" data-k="f" spellcheck="false" value="'+esc(t.f)+'"></label>'+
+    (t.kind==='pitch'?'<label class="f">時值（拍）<input type="text" data-k="r" spellcheck="false" placeholder="1" value="'+esc(t.r)+'"></label>':'')+
+    (t.voice==='wave'?'<label class="f">波形（t 秒、f 本音 Hz）<input type="text" data-k="wave" spellcheck="false" value="'+esc(t.wave)+'"></label>':'')+
+    '</div>').join('');
+}
+$('tracks').addEventListener('input',e=>{ const k=e.target.dataset.k, i=e.target.closest('.trk').dataset.i; if(!k) return;
+  const t=state.tracks[i]; t[k]=e.target.type==='checkbox'?e.target.checked:(e.target.type==='number'?+e.target.value:e.target.value);
+  if(k==='kind'||k==='voice'){ if(k==='voice'&&t.voice==='wave'&&!t.wave) t.wave='sin(2*pi*f*t)*exp(-t*4)'; paintTracks(); }
+  build(false); });
+$('tracks').addEventListener('click',e=>{ if(!e.target.classList.contains('x')) return; state.tracks.splice(+e.target.closest('.trk').dataset.i,1); paintTracks(); build(false); });
+$('addTrk').onclick=()=>{ if(state.tracks.length>=6) return; state.tracks.push(T({name:'軌 '+(state.tracks.length+1),f:'n',voice:'piano'})); paintTracks(); build(false); };
+$('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
+$('presets').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; load(JSON.parse(JSON.stringify(PRESETS[b.dataset.i][1]))); build(true); };
+function load(s){ state=s; $('bpm').value=s.bpm||120; paintTracks(); }
+
 function build(play){
-  $('err').textContent=''; $('fp').classList.remove('bad'); $('fr').classList.remove('bad');
+  $('err').textContent=''; document.querySelectorAll('.trk input.bad').forEach(x=>x.classList.remove('bad'));
+  const parts=[]; const cnt=+$('cnt').value, beats=+$('beats').value;
   try{
-    tune=Musician.fromFormula($('fp').value,{n:+$('cnt').value,bpm:+$('bpm').value,scale:$('sc').value,span:+$('span').value,rhythm:$('fr').value});
-  }catch(e){ $('err').textContent=e.message; $('fp').classList.add('bad'); tune=null; draw(); return false; }
-  draw();
-  if(play) go();
-  return true;
+    state.tracks.forEach((t,i)=>{
+      const el=document.querySelector('.trk[data-i="'+i+'"] input[data-k="f"]');
+      let notes;
+      try{
+        notes=t.kind==='pulse'?Musician.fromPulse(t.f,{beats,pitch:'C'+t.base}).notes
+          :Musician.fromFormula(t.f,{n:cnt,scale:$('sc').value,span:+$('span').value,base:t.base,rhythm:t.r}).notes;
+        if(t.voice==='wave') Musician.compileFormula(t.wave||'0');
+      }catch(e){ if(el) el.classList.add('bad'); throw new Error('「'+t.name+'」：'+e.message); }
+      const P={}; if(t.bounce>0) P.bounce=t.bounce; if(t.bell>0) P.bell=t.bell; if(t.voice==='wave') P.expr=t.wave;
+      parts.push({name:t.name,voice:t.voice,vol:t.vol,mute:t.mute,notes,P,_kind:t.kind});
+    });
+  }catch(e){ $('err').textContent=e.message; tune=null; draw(); return false; }
+  tune={id:'formula',name:'公式',composer:'公式作曲',bpm:+$('bpm').value||120,chords:false,parts};
+  draw(); if(play) go(); return true;
 }
-function go(){
-  if(!tune&&!build(false)) return;
-  Musician.stop();
-  Musician.play(tune,{cfg:CONFIG,voice:$('vo').value});
-}
+function go(){ if(!tune&&!build(false)) return; if(!tune.parts.length){ $('err').textContent='至少要有一軌'; return; } Musician.stop(); Musician.play(tune,{cfg:CONFIG}); }
 function draw(){
   const c=$('plot'), r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
   c.width=r.width*dpr; c.height=r.height*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr);
   const W=r.width, H=r.height; g.clearRect(0,0,W,H);
-  if(!tune){ $('names').textContent=''; return; }
+  if(!tune||!tune.parts.length){ $('names').textContent=''; return; }
   const midi=x=>{ const m=/^([A-G])(#?)(\d)$/.exec(x), B={C:0,D:2,E:4,F:5,G:7,A:9,B:11}; return 12*(+m[3]+1)+B[m[1]]+(m[2]?1:0); };
-  const ps=tune.notes.filter(n=>n[0]).map(n=>midi(n[0]));
-  const lo=Math.min(...ps,60)-1, hi=Math.max(...ps,72)+1, total=tune.notes.reduce((s,n)=>s+n[1],0);
+  const sum=p=>p.notes.reduce((s,n)=>s+n[1],0), total=Math.max(...tune.parts.map(sum));
+  const all=tune.parts.filter(p=>p._kind==='pitch').flatMap(p=>p.notes.filter(n=>n[0]).map(n=>midi(n[0])));
+  const lo=Math.min(...all,48)-1, hi=Math.max(...all,72)+1;
   g.strokeStyle='#2a2f52'; g.lineWidth=1;
-  for(let m=Math.ceil(lo);m<=hi;m++){ if(m%12===0){ const y=H-(m-lo)/(hi-lo)*H; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); } }
-  let t=0; g.fillStyle='#d4a94a';
-  for(const n of tune.notes){
-    if(n[0]){ const y=H-(midi(n[0])-lo)/(hi-lo)*H, x=t/total*W, w=Math.max(3,n[1]/total*W-2); g.fillRect(x,y-4,w,8); }
-    t+=n[1];
-  }
-  $('names').textContent=tune.notes.map(n=>n[0]||'0').join(' ');
+  for(let m=Math.ceil(lo);m<=hi;m++) if(m%12===0){ const y=H-(m-lo)/(hi-lo)*H; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  tune.parts.forEach((p,i)=>{
+    g.fillStyle=COLORS[i%COLORS.length]; g.globalAlpha=p.mute?0.25:1; let t=0;
+    for(const n of p.notes){
+      const x=t/total*W;
+      if(n[0]){ if(p._kind==='pulse'){ g.fillRect(x,H-14-i*0,Math.max(2,n[1]/total*W-1),12); }
+        else{ const y=H-(midi(n[0])-lo)/(hi-lo)*H; g.fillRect(x,y-4,Math.max(3,n[1]/total*W-2),8); } }
+      t+=n[1];
+    }
+  });
+  g.globalAlpha=1;
+  $('names').textContent=tune.parts.map(p=>p.name+'：'+p.notes.slice(0,48).map(n=>n[0]||'0').join(' ')).join('\n');
+  $('names').style.whiteSpace='pre-wrap';
 }
 $('go').onclick=()=>build(true);
 $('stop').onclick=()=>Musician.stop();
-for(const id of ['fp','fr']) $(id).addEventListener('keydown',e=>{ if(e.key==='Enter') build(true); });
-for(const id of ['fp','fr','cnt','bpm','sc','span']) $(id).addEventListener('input',()=>build(false));
-$('vo').onchange=()=>{ if(tune) go(); };
+for(const id of ['cnt','beats','bpm','sc','span']) $(id).addEventListener('input',()=>build(false));
 $('copy').onclick=()=>{
-  const q=new URLSearchParams({f:$('fp').value,r:$('fr').value,n:$('cnt').value,b:$('bpm').value,s:$('sc').value,o:$('span').value,v:$('vo').value});
-  const u=location.origin+location.pathname+'?'+q; try{ navigator.clipboard.writeText(u); $('err').style.color='var(--gold)'; $('err').textContent='連結已複製'; setTimeout(()=>{$('err').textContent='';$('err').style.color='';},1500); }catch(e){}
+  const s=Object.assign({},state,{bpm:+$('bpm').value,cnt:+$('cnt').value,beats:+$('beats').value,sc:$('sc').value,span:+$('span').value});
+  const u=location.origin+location.pathname+'?s='+encodeURIComponent(JSON.stringify(s));
+  try{ navigator.clipboard.writeText(u); $('err').style.color='var(--gold)'; $('err').textContent='連結已複製'; setTimeout(()=>{$('err').textContent='';$('err').style.color='';},1500); }catch(e){}
 };
-{ const q=new URLSearchParams(location.search);   // 分享連結：只當資料讀進輸入框，公式仍走同一個白名單解析器
-  if(q.get('f')) $('fp').value=q.get('f'); if(q.get('r')!=null) $('fr').value=q.get('r'); if(q.get('n')) $('cnt').value=q.get('n');
-  if(q.get('b')) $('bpm').value=q.get('b'); if(q.get('s')) $('sc').value=q.get('s'); if(q.get('o')) $('span').value=q.get('o');
-  if(q.get('v')&&FN_VOICES.includes(q.get('v'))) $('vo').value=q.get('v'); }
+{ let s=null;   // 分享連結：只當資料讀進輸入框，公式仍走同一個白名單解析器
+  try{ const q=new URLSearchParams(location.search).get('s'); if(q) s=JSON.parse(q); }catch(e){}
+  if(s&&Array.isArray(s.tracks)&&s.tracks.length<=6){
+    s.tracks=s.tracks.map(t=>T(Object.assign({},t,{voice:VOICES.includes(t.voice)?t.voice:'piano'})));
+    for(const [k,id] of [['cnt','cnt'],['beats','beats'],['sc','sc'],['span','span']]) if(s[k]!=null) $(id).value=s[k];
+    load(s);
+  } else load(JSON.parse(JSON.stringify(PRESETS[1][1]))); }
 window.addEventListener('resize',draw);
 build(false);
 </script>

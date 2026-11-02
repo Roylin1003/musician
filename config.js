@@ -59,9 +59,15 @@ const CONFIG = {
        fm＝sin(2πft + I(t)·sin(2π·ratio·ft))，I 由 iStart 衰減到 iEnd（tau 秒）：起音咬、之後乾淨
        folder＝波形折疊 1−4|frac((g·sinφ+1)/4)−½|，g 由 gStart 降到 gEnd（最大 8）
        monster＝魏爾斯特拉斯 Σ aⁿcos(ratioⁿπx)：layers 層、頻率每層 ×ratio、振幅每層 ×amp */
-    fm:      { gain: 0.22, attack: 0.004, release: 0.08, ratio: 2, iStart: 5, iEnd: 0.6, tau: 0.12, padScale: 0.5 },
-    folder:  { gain: 0.22, attack: 0.004, release: 0.08, gStart: 6, gEnd: 1.2, tau: 0.15, padScale: 0.5 },
-    monster: { gain: 0.12, attack: 0.006, release: 0.10, layers: 4, ratio: 3, amp: 0.55, padScale: 0.5 },
+    fm:      { gain: 0.22, attack: 0.004, release: 0.08, ratio: 2, iStart: 5, iEnd: 0.6, tau: 0.12, bounce: 0, bounceTau: 0.08, bell: 0, padScale: 0.5 },
+    folder:  { gain: 0.22, attack: 0.004, release: 0.08, gStart: 6, gEnd: 1.2, tau: 0.15, bounce: 0, bounceTau: 0.08, bell: 0, padScale: 0.5 },
+    monster: { gain: 0.12, attack: 0.006, release: 0.10, layers: 4, ratio: 3, amp: 0.55, bounce: 0, bounceTau: 0.08, bell: 0, padScale: 0.5 },
+    /* 每音動態（v1.25.00）：bounce＝音高彈跳深度（八度；1＝影片 3 號 f_k·2^{−e^{−t/τ}}，bounceTau＝τ 秒）；bell＝高斯包絡寬度（占音長比例，0＝關，0.2＝窄鐘）。
+       bounce／kick／hat／wave 是新音色：彈跳低音、調音脈衝鼓、嗆、波形公式（expr 是 t 與 f 的算式，逐取樣算） */
+    bounce:  { gain: 0.5, attack: 0.004, bounce: 1, bounceTau: 0.09, padScale: 0 },
+    kick:    { gain: 0.8, drop: 3, dropTime: 0.05, decay: 0.35, padScale: 0 },
+    hat:     { gain: 0.25, cutoff: 7000, decay: 0.05, padScale: 0 },
+    wave:    { gain: 0.3, expr: 'sin(2*pi*f*t+(0.6+4.4*exp(-t*8))*sin(4*pi*f*t))*exp(-t*3)', padScale: 0.5 },
     /* 真樂器取樣（v1.19.00）：只有音量與收音秒兩顆旋鈕；檔案對照在下面的 SAMPLES */
     r_vln:   { gain: 0.9, release: 0.25 }, r_cello: { gain: 0.9, release: 0.3 },
     r_trem:  { gain: 0.8, release: 0.25 }, r_tbn:   { gain: 0.8, release: 0.2 },

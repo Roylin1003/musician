@@ -17,6 +17,10 @@ const TEXT = {
   'ui.voice.fm':      'FM 咬音',
   'ui.voice.folder':  '折疊音',
   'ui.voice.monster': '怪物音',
+  'ui.voice.bounce':  '彈跳低音',
+  'ui.voice.kick':    '脈衝鼓',
+  'ui.voice.hat':     '嗆鈸',
+  'ui.voice.wave':    '波形公式',
   'ui.voice.guzheng': '古箏',
   'ui.voice.r_vln':   '真·小提琴', 'ui.voice.r_cello': '真·大提琴', 'ui.voice.r_trem': '真·弦樂顫音',
   'ui.voice.r_tbn':   '真·長號',   'ui.voice.r_tuba':  '真·低音號', 'ui.voice.r_tpt':  '真·小號',
@@ -111,7 +115,7 @@ const TEXT = {
 
 /* docgen 與遊戲端共用的入口。缺字 console 點名，不靜靜留空 */
 function applyText(CONFIG){
-  ['chip','crystal','piano','strings','flute','brass','choir','timpani','harp','shamisen','guzheng','fm','folder','monster'].forEach(v=>{
+  ['chip','crystal','piano','strings','flute','brass','choir','timpani','harp','shamisen','guzheng','fm','folder','monster','bounce','kick','hat','wave'].forEach(v=>{
     if(!TEXT['ui.voice.'+v]) console.warn('[strings] 缺音色名稱 ui.voice.'+v);
   });
   return CONFIG;
