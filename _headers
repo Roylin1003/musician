@@ -29,3 +29,6 @@
 
 /formula.html
   Cache-Control: public, max-age=0, must-revalidate
+
+/classics.js
+  Cache-Control: public, max-age=0, must-revalidate

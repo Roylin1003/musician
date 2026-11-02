@@ -34,6 +34,8 @@
   .trk .th input[type=checkbox]{width:22px; height:22px;}
   .trk .th button.x{padding:2px 12px;}
   #plot{width:100%; height:clamp(220px,40vh,520px); background:#10142a; border:1px solid var(--line); border-radius:12px; display:block;}
+  #now{min-height:2.2em; font-size:22px; color:var(--gold); font-family:Consolas,monospace; display:flex; gap:18px; flex-wrap:wrap;}
+  #now span{white-space:nowrap;}
   #names{color:var(--muted); font-size:15px; word-break:break-all; max-height:9em; overflow:auto;}
 </style>
 </head>
@@ -45,7 +47,7 @@
     <div class="row"><button id="addTrk">＋ 加一軌</button>
       <label class="f">音數<input type="number" id="cnt" min="1" max="512" value="32"></label>
       <label class="f">拍數（脈衝軌）<input type="number" id="beats" min="1" max="256" value="16"></label>
-      <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="loop" checked style="width:22px;height:22px">持續播放</label>
+      <label class="f">播完後<select id="mode"><option value="continue">接續演化（無限）</option><option value="repeat">原段循環</option><option value="once">只播一次</option></select></label>
       <label class="f">速度<input type="number" id="bpm" min="40" max="240" value="120"></label>
       <label class="f">音階<select id="sc"><option value="major">大調</option><option value="minor">小調</option><option value="pentatonic">五聲</option><option value="chromatic">半音階</option></select></label>
       <label class="f">範圍（八度）<input type="number" id="span" min="1" max="4" value="2"></label>
@@ -53,16 +55,21 @@
     <div id="err"></div>
     <div class="row"><button id="go">▶ 演奏</button><button id="stop">■ 停止</button><button id="copy">複製連結</button></div>
     <div class="chips" id="presets"></div>
+    <details id="classicsBox" open><summary style="cursor:pointer;color:var(--gold);font-size:18px;padding:6px 0">經典公式圖鑑——點一條就聽</summary>
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--text);margin:6px 0"><input type="checkbox" id="addMode" style="width:22px;height:22px">加成新一軌（不取代目前的）</label>
+      <div id="classics"></div></details>
   </section>
   <section class="box">
+    <div id="now"></div>
     <canvas id="plot"></canvas>
     <div id="names"></div>
   </section>
 </main>
 
-<script src="config.js?v=1.25.01"></script>
-<script src="strings.zh.js?v=1.25.01"></script>
-<script src="musician.js?v=1.25.01"></script>
+<script src="config.js?v=1.25.02"></script>
+<script src="strings.zh.js?v=1.25.02"></script>
+<script src="musician.js?v=1.25.02"></script>
+<script src="classics.js?v=1.25.02"></script>
 <script>
 const $=id=>document.getElementById(id);
 const COLORS=['#d4a94a','#7ea7d8','#e08a8a','#8ad4a0','#c49ae0','#e0c48a'];
@@ -112,9 +119,22 @@ $('tracks').addEventListener('click',e=>{ if(!e.target.classList.contains('x')) 
 $('addTrk').onclick=()=>{ if(state.tracks.length>=6) return; state.tracks.push(T({name:'軌 '+(state.tracks.length+1),f:'n',voice:'piano'})); paintTracks(); build(false); };
 $('presets').innerHTML=PRESETS.map((p,i)=>'<button data-i="'+i+'">'+p[0]+'</button>').join('');
 $('presets').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; load(JSON.parse(JSON.stringify(PRESETS[b.dataset.i][1]))); startFresh(); };
+/* 經典公式圖鑑：點一條＝載入並播放。pitch 配鋼琴好聽的音色；pulse 自動配一條低音墊底；wave 用波形公式音色＋一條黃金比旋律 */
+{ const groups={}; CLASSICS.forEach((c,i)=>{ (groups[c.g]=groups[c.g]||[]).push([c,i]); });
+  $('classics').innerHTML=Object.keys(groups).map(g=>'<div style="color:var(--muted);font-size:14px;margin:8px 0 4px">'+g+'</div><div class="chips">'+groups[g].map(([c,i])=>'<button data-c="'+i+'" title="'+esc((c.f||c.w)+(c.note?'　'+c.note:''))+'">'+c.name+'</button>').join('')+'</div>').join(''); }
+$('classics').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const c=CLASSICS[b.dataset.c];
+  let trk;
+  if(c.kind==='pitch') trk=T({name:c.name,f:c.f,voice:'piano',base:4,vol:0.8});
+  else if(c.kind==='pulse') trk=T({name:c.name,kind:'pulse',f:c.f,voice:'kick',base:2,vol:0.9});
+  else trk=T({name:c.name,f:'2*floor(3*frac(n*phi))',r:'1',voice:'wave',base:3,vol:0.8,wave:c.w});
+  let tracks;
+  if($('addMode').checked&&state.tracks.length<6) tracks=state.tracks.concat([trk]);
+  else if(c.kind==='pulse') tracks=[trk,T({name:'低音',f:'floor(3*frac(n*phi))',r:'2',voice:'bounce',base:2,vol:0.8,bounce:1})];
+  else tracks=[trk];
+  state.tracks=tracks; paintTracks(); startFresh(); };
 function load(s){ state=s; $('bpm').value=s.bpm||120; paintTracks(); }
 
-let chunk=0, playing=false;   // 持續播放：每一段接著上一段的 n 往下算（旋律繼續演化，不是原曲重複）
+let chunk=0, playing=false, raf=0;   // 持續播放：每一段接著上一段的 n 往下算（旋律繼續演化，不是原曲重複）
 function build(play){
   $('err').textContent=''; document.querySelectorAll('.trk input.bad').forEach(x=>x.classList.remove('bad'));
   const parts=[]; const cnt=+$('cnt').value, beats=+$('beats').value;
@@ -137,12 +157,15 @@ function build(play){
 function go(){
   if(!tune&&!build(false)) return; if(!tune.parts.length){ $('err').textContent='至少要有一軌'; return; }
   Musician.stop(); playing=true;
-  Musician.play(tune,{cfg:CONFIG,onend:()=>{ if(!playing||!$('loop').checked){ playing=false; return; } chunk++; if(build(false)) go(); else playing=false; }});
+  Musician.play(tune,{cfg:CONFIG,onend:()=>{ const m=$('mode').value; if(!playing||m==='once'){ playing=false; return; } if(m==='continue') chunk++; if(build(false)) go(); else playing=false; }});
+  if(!raf) raf=requestAnimationFrame(frame);
 }
 function startFresh(){ chunk=0; if(build(false)) go(); }
-function draw(){
+function draw(pos){
+  if(pos==null) pos=-1;
   const c=$('plot'), r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
-  c.width=r.width*dpr; c.height=r.height*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr);
+  const w=Math.round(r.width*dpr), h=Math.round(r.height*dpr); if(c.width!==w||c.height!==h){ c.width=w; c.height=h; }
+  const g=c.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
   const W=r.width, H=r.height; g.clearRect(0,0,W,H);
   if(!tune||!tune.parts.length){ $('names').textContent=''; return; }
   const midi=x=>{ const m=/^([A-G])(#?)(\d)$/.exec(x), B={C:0,D:2,E:4,F:5,G:7,A:9,B:11}; return 12*(+m[3]+1)+B[m[1]]+(m[2]?1:0); };
@@ -151,21 +174,28 @@ function draw(){
   const lo=Math.min(...all,48)-1, hi=Math.max(...all,72)+1;
   g.strokeStyle='#2a2f52'; g.lineWidth=1;
   for(let m=Math.ceil(lo);m<=hi;m++) if(m%12===0){ const y=H-(m-lo)/(hi-lo)*H; g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); }
+  const beatNow=pos>=0?pos/(60/tune.bpm):-1, cur=[];
   tune.parts.forEach((p,i)=>{
-    g.fillStyle=COLORS[i%COLORS.length]; g.globalAlpha=p.mute?0.25:1; let t=0;
+    g.fillStyle=COLORS[i%COLORS.length]; g.globalAlpha=p.mute?0.25:1; let t=0; let hit=null;
     for(const n of p.notes){
-      const x=t/total*W;
-      if(n[0]){ if(p._kind==='pulse'){ g.fillRect(x,H-14-i*0,Math.max(2,n[1]/total*W-1),12); }
-        else{ const y=H-(midi(n[0])-lo)/(hi-lo)*H; g.fillRect(x,y-4,Math.max(3,n[1]/total*W-2),8); } }
+      const x=t/total*W, on=beatNow>=t&&beatNow<t+n[1]&&n[0];
+      if(on) hit=n[0];
+      if(n[0]){ if(p._kind==='pulse'){ g.fillRect(x,H-14,Math.max(2,n[1]/total*W-1),12); if(on){ g.strokeStyle='#fff'; g.lineWidth=2; g.strokeRect(x-1,H-16,Math.max(4,n[1]/total*W+1),16); } }
+        else{ const y=H-(midi(n[0])-lo)/(hi-lo)*H, w=Math.max(3,n[1]/total*W-2);
+          if(on){ g.fillRect(x-2,y-9,w+4,18); g.strokeStyle='#fff'; g.lineWidth=2; g.strokeRect(x-2,y-9,w+4,18); } else g.fillRect(x,y-4,w,8); } }
       t+=n[1];
     }
+    cur.push([p.name,hit,COLORS[i%COLORS.length]]);
   });
   g.globalAlpha=1;
-  $('names').textContent=tune.parts.map(p=>p.name+'：'+p.notes.slice(0,48).map(n=>n[0]||'0').join(' ')).join('\n');
-  $('names').style.whiteSpace='pre-wrap';
+  if(beatNow>=0){ const x=Math.min(1,beatNow/total)*W; g.strokeStyle='rgba(255,255,255,.7)'; g.lineWidth=2; g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); }
+  $('now').innerHTML=beatNow>=0?(cur.map(c=>'<span style="color:'+c[2]+'">'+c[0]+' '+(c[1]||'·')+'</span>').join('')+'<span style="color:var(--muted)">第 '+(chunk+1)+' 段・第 '+(Math.floor(beatNow)+1)+' 拍</span>'):'';
+  const nm=tune.parts.map(p=>p.name+'：'+p.notes.slice(0,48).map(n=>n[0]||'0').join(' ')).join('\n');
+  if($('names').textContent!==nm){ $('names').textContent=nm; $('names').style.whiteSpace='pre-wrap'; }
 }
 $('go').onclick=startFresh;
-$('stop').onclick=()=>{ playing=false; Musician.stop(); };
+$('stop').onclick=()=>{ playing=false; Musician.stop(); draw(-1); };
+function frame(){ raf=0; draw(playing?Musician.position():-1); if(playing) raf=requestAnimationFrame(frame); }
 for(const id of ['cnt','beats','bpm','sc','span']) $(id).addEventListener('input',()=>build(false));
 $('copy').onclick=()=>{
   const s=Object.assign({},state,{bpm:+$('bpm').value,cnt:+$('cnt').value,beats:+$('beats').value,sc:$('sc').value,span:+$('span').value});
