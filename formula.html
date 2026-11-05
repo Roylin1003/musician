@@ -7,6 +7,12 @@
 <!-- 階段 3（2026-11-02）：公式作曲台已併進「做」頁（composer.html）。這個檔只留給舊連結跳轉。 -->
 <meta http-equiv="refresh" content="0; url=composer.html">
 <script>location.replace('composer.html');</script>
+<style id="touch-guard">
+html,body{touch-action:manipulation}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,[contenteditable],pre,#saveCode,#edCode,.selectable,.selectable *{-webkit-user-select:text;user-select:text}
+</style>
+<script>document.addEventListener('gesturestart',function(e){e.preventDefault()})</script>
 </head>
 <body style="background:#0e1325;color:#ebe7da;font:18px sans-serif;padding:24px">公式作曲台已併進 <a href="composer.html" style="color:#e0b24a">做</a>。</body>
 </html>
